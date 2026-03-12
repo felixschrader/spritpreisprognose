@@ -1,6 +1,6 @@
-# Projektname
+# Spritpreisprognose
 
-Kurze Beschreibung — was macht dieses Projekt, welches Problem löst es?
+Analyse und Prognose von Kraftstoffpreisen an deutschen Tankstellen — Abschlussprojekt der DSI-Weiterbildung.
 
 ---
 
@@ -12,36 +12,35 @@ Kurze Beschreibung — was macht dieses Projekt, welches Problem löst es?
 - [Verwendung](#verwendung)
 - [Daten](#daten)
 - [Ergebnisse](#ergebnisse)
-- [Beitragen](#beitragen)
 - [Lizenz](#lizenz)
 
 ---
 
 ## Überblick
 
-Beschreibe hier:
-- **Ziel** des Projekts
-- **Methoden** / verwendete Techniken
-- **Datenquellen**
+Dieses Projekt untersucht die Preisentwicklung von Kraftstoffen (z. B. E10, Diesel) an deutschen Tankstellen. Ziel ist es, Muster in den Preisschwankungen zu erkennen und eine Prognose für zukünftige Preise zu erstellen.
+
+**Methoden:**
+- Explorative Datenanalyse (EDA)
+- Zeitreihenanalyse
+- Prognosemodellierung
+
+**Datenquelle:** [Tankerkönig API](https://creativecommons.tankerkoenig.de/) (Open Data)
 
 ---
 
 ## Projektstruktur
 
 ```
-project/
+spritpreisprognose/
 ├── data/
-│   ├── raw/          # Originaldaten (nicht im Repo)
-│   ├── interim/      # Zwischenschritte
-│   └── processed/    # Bereinigte, fertige Daten
-├── notebooks/        # Jupyter Notebooks (Exploration, Analyse)
-├── src/              # Wiederverwendbare Python-Module
-│   ├── __init__.py
-│   ├── data.py       # Daten laden & verarbeiten
-│   └── analysis.py   # Analyse-Logik
-├── outputs/          # Plots, Reports, Exports
-├── tests/            # Unit Tests
-├── .env.example      # Vorlage für Umgebungsvariablen
+│   ├── raw/          # Rohdaten (nicht im Repo)
+│   └── processed/    # Bereinigte Daten
+├── notebooks/
+│   └── tankstelle_analyse.ipynb   # Hauptanalyse
+├── src/              # Python-Module (optional)
+├── outputs/          # Plots & Exports
+├── .env.example      # Vorlage für API Keys
 ├── .gitignore
 ├── requirements.txt
 └── README.md
@@ -53,20 +52,19 @@ project/
 
 ```bash
 # Repo klonen
-git clone https://github.com/dein-nutzername/projektname.git
-cd projektname
+git clone git@github.com:felixschrader/spritpreisprognose.git
+cd spritpreisprognose
 
 # Virtuelle Umgebung erstellen & aktivieren
 python -m venv .venv
-source .venv/bin/activate       # Linux / macOS
-# .venv\Scripts\activate        # Windows
+source .venv/bin/activate
 
 # Abhängigkeiten installieren
 pip install -r requirements.txt
 
 # Umgebungsvariablen einrichten
 cp .env.example .env
-# .env anpassen
+# .env mit API Key befüllen
 ```
 
 ---
@@ -74,38 +72,26 @@ cp .env.example .env
 ## Verwendung
 
 ```bash
-# Beispiel: Daten verarbeiten
-python src/data.py
-
-# Oder Notebook starten
-jupyter notebook notebooks/
+# Jupyter Notebook starten
+jupyter notebook notebooks/tankstelle_analyse.ipynb
 ```
 
 ---
 
 ## Daten
 
-Beschreibe die Datenquellen:
-- **Quelle**: z. B. Kaggle, öffentliche API, intern
-- **Format**: CSV, Parquet, …
-- **Lizenz / Nutzungsbedingungen**: …
+Die Preisdaten stammen von der **Tankerkönig Open Data API** und stehen unter der Creative-Commons-Lizenz CC BY 4.0.
 
-> Rohdaten sind **nicht im Repository** enthalten. Anleitung zum Download: …
+> Rohdaten sind nicht im Repository enthalten. API-Key unter [tankerkoenig.de](https://creativecommons.tankerkoenig.de/) beantragen und in `.env` eintragen.
 
 ---
 
 ## Ergebnisse
 
-Kurze Zusammenfassung der wichtigsten Erkenntnisse oder Outputs.
-
----
-
-## Beitragen
-
-Pull Requests sind willkommen! Bitte zuerst ein Issue öffnen.
+*Werden nach Abschluss der Analyse ergänzt.*
 
 ---
 
 ## Lizenz
 
-[MIT](LICENSE) — oder Lizenz deiner Wahl.
+MIT License — Felix Schrader, 2026
