@@ -1,0 +1,25 @@
+# Abhängigkeiten einfrieren mit: pip freeze > requirements.txt
+# Nur direkte Dependencies eintragen (nicht alle transitiven)
+
+# Datenverarbeitung
+pandas>=2.0
+numpy>=1.24
+
+# Analyse & Visualisierung
+matplotlib>=3.7
+seaborn>=0.12
+
+# Notebooks
+jupyter>=1.0
+ipykernel>=6.0
+
+# Umgebungsvariablen
+python-dotenv>=1.0
+
+# Optional: Maschinenlernen
+# scikit-learn>=1.3
+
+# Optional: Daten laden
+# requests>=2.31
+# openpyxl>=3.1   # Excel
+# pyarrow>=12.0   # Parquet
