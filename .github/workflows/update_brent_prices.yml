@@ -22,7 +22,7 @@ jobs:
 
       - name: Run analysis
         id: analysis
-        run: python brent_prices.py
+        run: python brent_price.py
 
       - name: Commit changes
         run: |
@@ -40,7 +40,7 @@ jobs:
           SLACK_TITLE: "Brent Preis-Update"
           SLACK_MESSAGE: |
             *Status:* ${{ job.status == 'success' && '✅ Erfolgreich' || '❌ Fehlgeschlagen' }}
-            *Zeit:* $(TZ='Europe/Berlin' date +'%d.%m.%Y %H:%M')
+            *Zeit:* ${{ steps.analysis.outputs.updated }}
             *Preis:* ${{ steps.analysis.outputs.last_price }} USD
             *Trend:* ${{ steps.analysis.outputs.trend_30d }}
           SLACK_FOOTER: "GitHub Actions | Brent-Preis-Bot"
