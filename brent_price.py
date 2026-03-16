@@ -3,6 +3,7 @@ import pandas as pd
 import io
 import os
 from datetime import datetime
+import plotly.express as px
 
 
 def update_brent_prices():
@@ -22,7 +23,12 @@ def update_brent_prices():
         )
 
     os.makedirs("data", exist_ok=True)
+    os.makedirs("plots", exist_ok=True)
+
     oil_data.to_csv("data/brent_prices.csv")
+
+    fig = px.line(oil_data, x=oil_data.index, y="DCOILBRENTEU", title="Brent Ölpreis")
+    fig.write_html("plots/brent_prices.html")
 
     stats = {
         "last_price": float(oil_data["DCOILBRENTEU"].iloc[-1]),
