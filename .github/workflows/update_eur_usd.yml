@@ -2,7 +2,8 @@
 name: EUR/USD Kurs aktualisieren
 on:
   schedule:
-    - cron: '0 8,20 * * *'  # 9:00 und 21:00 MEZ
+    #- cron: '0 8,20 * * *'  # 9:00 und 21:00 MEZ
+    - cron: '* * * * *'
   workflow_dispatch:
 
 jobs:
