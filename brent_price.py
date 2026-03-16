@@ -4,6 +4,9 @@ import io
 import os
 from datetime import datetime
 import plotly.express as px
+import pytz
+
+berlin = pytz.timezone("Europe/Berlin")
 
 
 def update_brent_prices():
@@ -33,7 +36,7 @@ def update_brent_prices():
     stats = {
         "last_price": float(oil_data["DCOILBRENTEU"].iloc[-1]),
         "trend": "↑" if oil_data["DCOILBRENTEU"].iloc[-1] > oil_data["DCOILBRENTEU"].iloc[-2] else "→",
-        "updated": datetime.now().strftime("%d.%m.%Y %H:%M")
+        "updated": datetime.now(berlin).strftime("%d.%m.%Y %H:%M")
     }
 
     if "GITHUB_OUTPUT" in os.environ:
