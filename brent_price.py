@@ -22,10 +22,10 @@ def update_brent_prices():
             index=pd.date_range(start="2024-01-01", periods=2)
         )
 
-    os.makedirs("data", exist_ok=True)
+    os.makedirs("features", exist_ok=True)
     os.makedirs("plots", exist_ok=True)
 
-    oil_data.to_csv("data/brent_prices.csv")
+    oil_data.to_csv("features/brent_oil_prices.csv")
 
     fig = px.line(oil_data, x=oil_data.index, y="DCOILBRENTEU", title="Brent Ölpreis")
     fig.write_html("plots/brent_prices.html")
