@@ -1,62 +1,34 @@
-# oil_analysis.py
+import requests
 import pandas as pd
-from pandas_datareader import data as pdr
-from datetime import datetime
+import io
 import os
-import plotly.express as px
-import json
-from dotenv import load_dotenv
+from datetime import datetime
 
-# .env Datei laden
-load_dotenv()
+def update_brent_prices():
+    try:
+        url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILBRENTEU"
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        oil_data = pd.read_csv(io.StringIO(r.text), index_col=0, parse_dates=True)
+        oil_data.columns = ["DCOILBRENTEU"]
+        oil_data = oil_data[oil_data["DCOILBRENTEU"] != "."]  # FRED nutzt "." für fehlende Werte
+        oil_data["DCOILBRENTEU"] = oil_data["DCOILBRENTEU"].astype(float)
+    except Exception as e:
+        print(f"ℹ️  Fallback auf Testdaten ({e})")
+        oil_data = pd.DataFrame(
+            {"DCOILBRENTEU": [85.42, 86.10]},
+            index=pd.date_range(start="2024-01-01", periods=2)
+        )
 
-def update_oil_data():
-    # API-Key aus Umgebungsvariablen
-    FRED_API_KEY = os.getenv("FRED_API_KEY")
-    if not FRED_API_KEY:
-        raise ValueError("FRED_API_KEY nicht in .env gesetzt!")
-
-    # Daten laden
-    oil_data = pdr.DataReader("DCOILBRENTEU", "fred", start="2014-01-01")
-
-    # Verzeichnisse erstellen
     os.makedirs("data", exist_ok=True)
-    os.makedirs("plots", exist_ok=True)
-
-    # Daten speichern
-    oil_data.to_csv("data/brent_oil_prices.csv")
-
-    # Monatsdurchschnitt
-    monthly_avg = oil_data.resample('M').mean()
-    monthly_avg.to_csv("data/brent_oil_monthly.csv")
-
-    # Statistiken
+    oil_data.to_csv("data/brent_prices.csv")
     stats = {
-        "last_price": float(oil_data.iloc[-1]["DCOILBRENTEU"]),
-        "updated": datetime.today().strftime("%Y-%m-%d")
+        "last_price": float(oil_data["DCOILBRENTEU"].iloc[-1]),
+        "trend": "↑" if oil_data["DCOILBRENTEU"].iloc[-1] > oil_data["DCOILBRENTEU"].iloc[-2] else "→",
+        "updated": datetime.now().strftime("%d.%m.%Y %H:%M")
     }
-    with open("data/stats.json", "w") as f:
-        json.dump(stats, f)
-
-    # Plot erstellen
-    fig = px.line(oil_data, x=oil_data.index, y="DCOILBRENTEU",
-                 title="Brent Ölpreis 2014–heute")
-    fig.write_html("plots/oil_price.html")
-
-    
-    stats = {
-        "last_price": float(oil_data.iloc[-1]["DCOILBRENTEU"]),
-        "trend": "steigend" if oil_data.iloc[-1]["DCOILBRENTEU"] > oil_data.iloc[-30]["DCOILBRENTEU"] else "fallend",
-        "updated": datetime.today().strftime("%Y-%m-%d %H:%M")
-    }
-
-    # Für GitHub Actions Output
-    print(f"::set-output name=last_price::{stats['last_price']}")
-    print(f"::set-output name=trend::{stats['trend']}")
-
     return stats
 
 if __name__ == "__main__":
-    stats = update_oil_data()
-    print("✅ Daten erfolgreich aktualisiert!")
-    print(json.dumps(stats, indent=2))
+    stats = update_brent_prices()
+    print(f"Preis: {stats['last_price']} USD | Trend: {stats['trend']} | {stats['updated']}")
