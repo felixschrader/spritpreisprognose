@@ -6,8 +6,6 @@ from datetime import datetime
 import plotly.express as px
 import pytz
 
-berlin = pytz.timezone("Europe/Berlin")
-
 
 def update_brent_prices():
     try:
@@ -25,14 +23,15 @@ def update_brent_prices():
             index=pd.date_range(start="2024-01-01", periods=2)
         )
 
-    os.makedirs("features", exist_ok=True)
+    os.makedirs("data", exist_ok=True)
     os.makedirs("plots", exist_ok=True)
 
-    oil_data.to_csv("features/brent_oil_prices.csv")
+    oil_data.to_csv("data/brent_oil_prices.csv")
 
     fig = px.line(oil_data, x=oil_data.index, y="DCOILBRENTEU", title="Brent Ölpreis")
     fig.write_html("plots/brent_prices.html")
 
+    berlin = pytz.timezone("Europe/Berlin")
     stats = {
         "last_price": float(oil_data["DCOILBRENTEU"].iloc[-1]),
         "trend": "↑" if oil_data["DCOILBRENTEU"].iloc[-1] > oil_data["DCOILBRENTEU"].iloc[-2] else "→",

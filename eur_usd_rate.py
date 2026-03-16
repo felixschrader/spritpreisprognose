@@ -6,7 +6,6 @@ from datetime import datetime
 import plotly.express as px
 import pytz
 
-berlin = pytz.timezone("Europe/Berlin")
 
 def update_eur_usd():
     try:
@@ -26,14 +25,15 @@ def update_eur_usd():
             "EUR_USD": [1.085, 1.090]
         })
 
-    os.makedirs("features", exist_ok=True)
+    os.makedirs("data", exist_ok=True)
     os.makedirs("plots", exist_ok=True)
 
-    df.to_csv("features/eur_usd_rate.csv", index=False)
+    df.to_csv("data/eur_usd_rate.csv", index=False)
 
     fig = px.line(df, x="date", y="EUR_USD", title="EUR/USD Wechselkurs (EZB)")
     fig.write_html("plots/eur_usd_rate.html")
 
+    berlin = pytz.timezone("Europe/Berlin")
     stats = {
         "last_rate": float(df["EUR_USD"].iloc[-1]),
         "trend": "↑" if df["EUR_USD"].iloc[-1] > df["EUR_USD"].iloc[-2] else "→",
