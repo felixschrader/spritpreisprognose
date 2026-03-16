@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: write
-  
+
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -33,7 +33,7 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add data/ plots/ || true
-          git diff --quiet || (git commit -m "Update $(TZ='Europe/Berlin' date +'%Y-%m-%d %H:%M')" && git push)
+          git status --porcelain | grep -q . && git commit -m "Update $(TZ='Europe/Berlin' date +'%Y-%m-%d %H:%M')" && git push || echo "Keine Änderungen"
 
       - name: Send Slack Notification
         if: always()
