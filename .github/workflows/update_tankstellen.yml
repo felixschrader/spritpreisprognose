@@ -1,32 +1,76 @@
 # .github/workflows/update_tankstellen.yml
+#
+# Dieser Workflow läuft täglich und aktualisiert die historischen Tankstellenpreise.
+# Die Daten stammen aus dem passwortgeschützten Git-Repository von Tankerkönig,
+# das täglich mit den CSV-Dateien des Vortages befüllt wird.
+# Der Workflow läuft daher früh morgens, wenn die neue Datei garantiert verfügbar ist.
+
 name: Tankstellenpreise aktualisieren
 
 on:
-  workflow_dispatch:
+  schedule:
+    # Täglich um 5:00 Uhr Berliner Zeit (= 4:00 UTC, Winterzeit als Basis)
+    # Cron-Syntax: Minute Stunde Tag Monat Wochentag (immer UTC!)
+    - cron: '0 4 * * *'
+  workflow_dispatch:  # Manueller Start über GitHub UI jederzeit möglich
 
 permissions:
-  contents: write
+  contents: write  # Nötig damit der Workflow Dateien committen und pushen darf
 
 jobs:
   update:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Frische Linux-Umgebung bei jedem Lauf
 
     steps:
+      # Schritt 1: Repository auschecken — explizit 'main'
+      # So arbeitet der Workflow immer auf main, egal von wo er getriggert wird
       - uses: actions/checkout@v4
         with:
           ref: main
 
+      # Schritt 2: Python-Version festlegen
+      # Konsistent mit der lokalen Entwicklungsumgebung und den übrigen Workflows
       - uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
+      # Schritt 3: pip-Cache wiederverwenden
+      # Der Cache wird anhand eines Hashes der requirements.txt identifiziert.
+      # Ändert sich die Datei nicht, werden alle Pakete aus dem Cache geladen
+      # statt neu heruntergeladen — spart ca. 60 Sekunden pro Run.
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: pip-${{ hashFiles('requirements.txt') }}
 
+      # Schritt 4: Abhängigkeiten installieren
+      # Bei Cache-Treffer dauert dieser Schritt nur wenige Sekunden
       - run: pip install -r requirements.txt
 
+      # Schritt 5: Umgebungsvariablen bereitstellen
+      # Die API-Credentials und der Slack-Webhook sind als GitHub Secrets hinterlegt
+      # und werden hier in eine .env-Datei geschrieben, die von python-dotenv
+      # zur Laufzeit eingelesen wird. Secrets erscheinen in Logs niemals im Klartext.
+      - name: Create .env file
+        run: |
+          echo "TANKERKOENIG_USER=${{ secrets.TANKERKOENIG_USER }}" >> .env
+          echo "TANKERKOENIG_KEY=${{ secrets.TANKERKOENIG_KEY }}" >> .env
+          echo "SLACK_WEBHOOK=${{ secrets.SLACK_WEBHOOK }}" >> .env
+
+      # Schritt 6: Tankerkönig-Daten herunterladen
+      # Die historischen Preisdaten sind nur per git clone zugänglich —
+      # ein direkter HTTP-Download ist nicht möglich.
+      #
+      # Um nicht das gesamte Repository (12+ Jahre Preishistorie, mehrere GB)
+      # zu übertragen, werden zwei Git-Optimierungen kombiniert:
+      #
+      #   --depth 1          Lädt nur den aktuellsten Commit, keine History
+      #   --filter=blob:none Überträgt zunächst nur die Verzeichnisstruktur,
+      #                      keine Dateiinhalte
+      #
+      # Per "sparse-checkout" wird dann exakt festgelegt welche Dateien
+      # tatsächlich vom Server übertragen werden — nur die CSV des heutigen
+      # und gestrigen Tages sowie die Stammdaten der Tankstellen.
       - name: Download Tankerkönig CSVs
         run: |
           git clone \
@@ -35,16 +79,68 @@ jobs:
             --filter=blob:none \
             https://${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}@data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data.git \
             /tmp/tk-repo
-          
+
           cd /tmp/tk-repo
+
+          # sparse-checkout aktivieren und Stammdaten als ersten Pfad registrieren
           git sparse-checkout set stations/stations.csv
-          
+
+          # Datumspfade dynamisch berechnen
+          # Tankerkönig-Struktur: prices/YYYY/MM/YYYY-MM-DD-prices.csv
           TODAY=$(date +%Y/%m/%Y-%m-%d)
           YESTERDAY=$(date -d "yesterday" +%Y/%m/%Y-%m-%d)
           git sparse-checkout add prices/${TODAY}-prices.csv
           git sparse-checkout add prices/${YESTERDAY}-prices.csv
-          
+
+          # Erst jetzt werden die registrierten Dateien tatsächlich übertragen
           git checkout master
+
+          # Zur Kontrolle: heruntergeladene Dateien im Log ausgeben
+          echo "=== Heruntergeladene Dateien ==="
+          find /tmp/tk-repo -name "*.csv" | sort
         env:
           TANKERKOENIG_USER: ${{ secrets.TANKERKOENIG_USER }}
           TANKERKOENIG_KEY: ${{ secrets.TANKERKOENIG_KEY }}
+
+      # Schritt 7: ETL-Pipeline ausführen
+      # tankerkoenig_pipeline.py liest die heruntergeladenen CSVs ein,
+      # bereinigt und transformiert die Rohdaten und schreibt das Ergebnis
+      # an die bestehende Parquet-Datei im Repository an (append).
+      #
+      #   --update   Nur neue Daten ab dem letzten bekannten Timestamp verarbeiten
+      #   --no-pull  Kein erneutes git pull innerhalb des Skripts — der Download
+      #              wurde bereits in Schritt 6 erledigt
+      - name: Run pipeline update
+        id: pipeline
+        env:
+          TANKERKOENIG_DATA_ROOT: /tmp/tk-repo
+        run: python tankerkoenig_pipeline.py --update --no-pull
+
+      # Schritt 8: Ergebnisse committen und pushen
+      # Die aktualisierte Parquet-Datei wird als neuer Commit auf main gespeichert.
+      # Falls keine neuen Daten vorlagen, wird kein leerer Commit erstellt.
+      - name: Commit and push to main
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add data/tankstellen_preise.parquet data/tankstellen_stationen.parquet
+          git status --porcelain | grep -q . \
+            && git commit -m "data: Tankstellen update $(TZ='Europe/Berlin' date +'%Y-%m-%d %H:%M')" \
+            && git push origin main \
+            || echo "Keine Änderungen — kein Commit nötig"
+
+      # Schritt 9: Slack-Benachrichtigung senden
+      # Wird unabhängig vom Ergebnis ausgeführt ("if: always()") —
+      # auch bei Fehlern in vorherigen Steps wird eine Meldung verschickt.
+      - name: Send Slack Notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
+          SLACK_TITLE: "Tankstellen-Update"
+          SLACK_MESSAGE: |
+            *Status:* ${{ job.status == 'success' && '✅ Erfolgreich' || '❌ Fehlgeschlagen' }}
+            *Zeilen:* ${{ steps.pipeline.outputs.zeilen }}
+            *Stationen:* ${{ steps.pipeline.outputs.stationen }}
+          SLACK_FOOTER: "GitHub Actions | Tankerkönig-Bot"
