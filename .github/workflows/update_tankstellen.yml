@@ -27,22 +27,12 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Download Tankerkönig CSVs (heute + gestern)
+      - name: Test Tankerkönig Pfadstruktur
         run: |
-          for DATE in $(date +%Y-%m-%d) $(date -d "yesterday" +%Y-%m-%d); do
-            YEAR=$(echo $DATE | cut -d- -f1)
-            MONTH=$(echo $DATE | cut -d- -f2)
-            mkdir -p /tmp/tankerkoenig-data/prices/${YEAR}/${MONTH}
-            curl -u "${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}" -fsSL \
-              "https://data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data/-/raw/master/prices/${YEAR}/${MONTH}/${DATE}-prices.csv" \
-              -o "/tmp/tankerkoenig-data/prices/${YEAR}/${MONTH}/${DATE}-prices.csv" \
-              && echo "✅ ${DATE}" || echo "❌ ${DATE} fehlgeschlagen"
-          done
-          mkdir -p /tmp/tankerkoenig-data/stations
+          # Verzeichnisstruktur abrufen ohne Dateien herunterzuladen
           curl -u "${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}" -fsSL \
-            "https://data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data/-/raw/master/stations/stations.csv" \
-            -o "/tmp/tankerkoenig-data/stations/stations.csv" \
-            && echo "✅ stations.csv" || echo "❌ stations.csv fehlgeschlagen"
+            "https://data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data/-/tree/master/prices/2026/03?format=json" \
+            | head -c 2000
         env:
           TANKERKOENIG_USER: ${{ secrets.TANKERKOENIG_USER }}
           TANKERKOENIG_KEY: ${{ secrets.TANKERKOENIG_KEY }}
