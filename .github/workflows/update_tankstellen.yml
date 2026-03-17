@@ -27,22 +27,12 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Download Tankerkönig CSVs
+      - name: Debug Tankerkönig URL
         run: |
-          for DATE in $(date +%Y-%m-%d) $(date -d "yesterday" +%Y-%m-%d); do
-            YEAR=$(echo $DATE | cut -d- -f1)
-            MONTH=$(echo $DATE | cut -d- -f2)
-            mkdir -p /tmp/tankerkoenig-data/prices/${YEAR}/${MONTH}
-            curl -fsSL \
-              "https://${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}@data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data/-/raw/master/prices/${YEAR}/${MONTH}/${DATE}-prices.csv" \
-              -o "/tmp/tankerkoenig-data/prices/${YEAR}/${MONTH}/${DATE}-prices.csv" \
-              && echo "✅ ${DATE}" || echo "❌ ${DATE} fehlgeschlagen"
-          done
-          mkdir -p /tmp/tankerkoenig-data/stations
-          curl -fsSL \
+          echo "=== Test 1: Mit verbose ==="
+          curl -v \
             "https://${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}@data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data/-/raw/master/stations/stations.csv" \
-            -o "/tmp/tankerkoenig-data/stations/stations.csv" \
-            && echo "✅ stations.csv" || echo "❌ stations.csv fehlgeschlagen"
+            2>&1 | head -60
         env:
           TANKERKOENIG_USER: ${{ secrets.TANKERKOENIG_USER }}
           TANKERKOENIG_KEY: ${{ secrets.TANKERKOENIG_KEY }}
