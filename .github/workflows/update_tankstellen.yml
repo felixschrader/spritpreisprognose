@@ -1,0 +1,63 @@
+# .github/workflows/update_tankstellen.yml
+#
+# Fortschreibung der Tankerkönig-Preisdaten für alle enthaltenen Stationen.
+# Welche Städte enthalten sind, ergibt sich aus data/tankstellen_preise.parquet —
+# neue Städte lokal mit --add-stadt hinzufügen und pushen.
+#
+# Secrets: TANKERKOENIG_USER, TANKERKOENIG_KEY, SLACK_WEBHOOK
+
+name: Tankstellenpreise aktualisieren
+
+on:
+  workflow_dispatch:  # Nur manueller Start
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - run: pip install -r requirements.txt
+
+      - name: Create .env file
+        run: |
+          echo "TANKERKOENIG_USER=${{ secrets.TANKERKOENIG_USER }}" >> .env
+          echo "TANKERKOENIG_KEY=${{ secrets.TANKERKOENIG_KEY }}" >> .env
+          echo "SLACK_WEBHOOK=${{ secrets.SLACK_WEBHOOK }}" >> .env
+
+      - name: Run update
+        id: pipeline
+        run: python tankerkoenig_pipeline.py --update
+
+      - name: Commit and push to main
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add data/tankstellen_preise.parquet data/tankstellen_stationen.parquet
+          git status --porcelain | grep -q . \
+            && git commit -m "data: Tankstellen update $(TZ='Europe/Berlin' date +'%Y-%m-%d %H:%M')" \
+            && git push origin main \
+            || echo "Keine Änderungen — kein Commit nötig"
+
+      - name: Send Slack Notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
+          SLACK_TITLE: "Tankstellen-Update"
+          SLACK_MESSAGE: |
+            *Status:* ${{ job.status == 'success' && '✅ Erfolgreich' || '❌ Fehlgeschlagen' }}
+            *Zeilen:* ${{ steps.pipeline.outputs.zeilen }}
+            *Stationen:* ${{ steps.pipeline.outputs.stationen }}
+          SLACK_FOOTER: "GitHub Actions | Tankerkönig-Bot"
