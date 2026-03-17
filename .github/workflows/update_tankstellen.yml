@@ -3,8 +3,7 @@
 # Aktualisiert das Kölner Tankstellen-Parquet mit den neuesten Preisdaten.
 #
 # Strategie:
-#   - git clone --depth 1: holt nur den aktuellen Stand von Tankerkönig
-#     (keine History seit 2014 — nur die neuesten Dateien, dauert Sekunden)
+#   - Sparse Checkout: holt nur prices/YYYY/MM/ (aktueller + Vormonat) + stations/
 #   - Liest UUIDs aus bestehendem Parquet im Repo
 #   - Hängt nur neue Daten an
 #   - Pusht auf main
@@ -32,7 +31,6 @@ jobs:
         with:
           python-version: "3.10"
 
-      # pip-Cache: Pakete werden zwischen Runs gecacht — spart ~40 Sekunden
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
@@ -46,44 +44,17 @@ jobs:
           echo "TANKERKOENIG_KEY=${{ secrets.TANKERKOENIG_KEY }}" >> .env
           echo "SLACK_WEBHOOK=${{ secrets.SLACK_WEBHOOK }}" >> .env
 
-      # Nur den aktuellen Stand klonen (kein komplettes Repo mit History)
-      # --depth 1: nur neueste Dateien, keine Git-History seit 2014
-      # --no-checkout: noch keine Dateien herunterladen
-      # --filter=blob:none: Dateien erst bei Bedarf laden (noch schneller)
-      - name: Clone Tankerkönig (shallow)
+      - name: Clone Tankerkönig (sparse — nur aktueller + Vormonat)
         run: |
+          YEAR=$(date +%Y)
+          MONTH=$(date +%m)
+          PREV_YEAR=$(date -d "$(date +%Y-%m-01) -1 month" +%Y)
+          PREV_MONTH=$(date -d "$(date +%Y-%m-01) -1 month" +%m)
+
           git clone \
             --depth 1 \
             --filter=blob:none \
+            --no-checkout \
+            --sparse \
             https://${{ secrets.TANKERKOENIG_USER }}:${{ secrets.TANKERKOENIG_KEY }}@data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data.git \
-            /tmp/tankerkoenig
-
-      - name: Set Tankerkönig path and run update
-        id: pipeline
-        env:
-          # Überschreibt den lokalen Pfad aus .env
-          TANKERKOENIG_DATA_ROOT: /tmp/tankerkoenig
-        run: python tankerkoenig_pipeline.py --update --no-pull
-
-      - name: Commit and push to main
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add data/tankstellen_preise.parquet data/tankstellen_stationen.parquet
-          git status --porcelain | grep -q . \
-            && git commit -m "data: Tankstellen update $(TZ='Europe/Berlin' date +'%Y-%m-%d %H:%M')" \
-            && git push origin main \
-            || echo "Keine Änderungen — kein Commit nötig"
-
-      - name: Send Slack Notification
-        if: always()
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
-          SLACK_TITLE: "Tankstellen-Update"
-          SLACK_MESSAGE: |
-            *Status:* ${{ job.status == 'success' && '✅ Erfolgreich' || '❌ Fehlgeschlagen' }}
-            *Zeilen:* ${{ steps.pipeline.outputs.zeilen }}
-            *Stationen:* ${{ steps.pipeline.outputs.stationen }}
-          SLACK_FOOTER: "GitHub Actions | Tankerkönig-Bot"
+            /tmp/tankerkoe
