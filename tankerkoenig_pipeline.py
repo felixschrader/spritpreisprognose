@@ -40,14 +40,12 @@ load_dotenv()
 
 
 # =============================================================================
-# Stadtdefinitionen — PLZ-Präfixe pro Stadt
-# Neue Stadt hier eintragen, dann mit --add-stadt laden
+# Stadtdefinitionen — Referenzpunkt (lat/lon) + Radius in km
+# Neue Stadt einfach hier eintragen, dann mit --add-stadt laden
 # =============================================================================
 
-# Stadtdefinitionen: Referenzpunkt (lat/lon) + Radius in km
-# Neue Stadt einfach hier eintragen
 STADT_CONFIGS: dict[str, dict] = {
-    "koeln":      {"lat": 50.919537, "lon": 6.852624, "radius_km": 5,  "label": "Köln (Aral Dürener Str. 407)"},
+    "koeln":      {"lat": 50.919537, "lon": 6.852624,  "radius_km": 5,  "label": "Köln (Aral Dürener Str. 407)"},
     "berlin":     {"lat": 52.520008, "lon": 13.404954, "radius_km": 15, "label": "Berlin"},
     "hamburg":    {"lat": 53.550341, "lon": 10.000654, "radius_km": 15, "label": "Hamburg"},
     "muenchen":   {"lat": 48.137154, "lon": 11.576124, "radius_km": 15, "label": "München"},
@@ -66,9 +64,6 @@ STADT_CONFIGS: dict[str, dict] = {
 # Konfiguration
 # =============================================================================
 
-# Pfad zu den Tankerkönig-Rohdaten
-# Lokal: externe Festplatte
-# GitHub Actions: wird per Umgebungsvariable TANKERKOENIG_DATA_ROOT überschrieben
 DATA_ROOT    = Path(os.environ.get("TANKERKOENIG_DATA_ROOT", "/media/rex/6DFF-26FE/Tankerkoenig"))
 STATIONS_CSV = DATA_ROOT / "stations" / "stations.csv"
 PRICES_DIR   = DATA_ROOT / "prices"
@@ -142,20 +137,17 @@ def lade_stationen_fuer_stadt(stadtname: str) -> pd.DataFrame:
     """
     Lädt alle Tankstellen im Umkreis des Referenzpunkts der Stadt.
     Filter: Haversine-Distanz <= radius_km.
-    Präziser als PLZ oder city-Match.
     """
     config = STADT_CONFIGS[stadtname]
     ref_lat, ref_lon, radius_km = config["lat"], config["lon"], config["radius_km"]
 
     stationen = pd.read_csv(STATIONS_CSV, dtype={"post_code": str, "uuid": str})
 
-    # Entfernung zum Referenzpunkt berechnen
     stationen["distanz_km"] = haversine(
         ref_lat, ref_lon,
         stationen["latitude"], stationen["longitude"]
     )
 
-    # Auf Umkreis filtern
     result = stationen[stationen["distanz_km"] <= radius_km].copy()
     result["stadt"] = stadtname
 
@@ -277,15 +269,14 @@ def add_stadt(stadtname: str, workers: int, test: bool, no_pull: bool):
     """
     if stadtname not in STADT_CONFIGS:
         raise ValueError(
-            f"'{stadtname}' nicht in STADT_PLZ_PREFIXES.\n"
-            f"Verfügbar: {', '.join(sorted(STADT_PLZ_PREFIXES.keys()))}"
+            f"'{stadtname}' nicht in STADT_CONFIGS.\n"
+            f"Verfügbar: {', '.join(sorted(STADT_CONFIGS.keys()))}"  # FIX: war STADT_PLZ_PREFIXES
         )
 
     print(f"\n📍 Lade Stationen für {stadtname.capitalize()}...")
     neue_stationen = lade_stationen_fuer_stadt(stadtname)
     print(f"✅ {len(neue_stationen)} Stationen gefunden")
 
-    # Prüfen ob Stadt schon teilweise im Parquet ist
     neue_uuids = set(neue_stationen["uuid"])
     if OUT_PREISE.exists():
         df_existing = pd.read_parquet(OUT_PREISE, columns=["station_uuid"])
@@ -303,10 +294,8 @@ def add_stadt(stadtname: str, workers: int, test: bool, no_pull: bool):
     if not no_pull and not test:
         pull_tankerkoenig()
 
-    # Preise für neue Stationen laden
     df_neu = lade_preise(neue_uuids, workers=workers, test=test)
 
-    # Stationen-Parquet aktualisieren
     OUTPUT_DIR.mkdir(exist_ok=True)
     if OUT_STATIONEN.exists():
         df_stat_existing = pd.read_parquet(OUT_STATIONEN)
@@ -321,7 +310,6 @@ def add_stadt(stadtname: str, workers: int, test: bool, no_pull: bool):
     df_stationen.to_parquet(OUT_STATIONEN, index=False)
     print(f"📄 Stationen gespeichert: {OUT_STATIONEN} ({len(df_stationen)} gesamt)")
 
-    # Preise-Parquet aktualisieren
     if OUT_PREISE.exists() and not test:
         df_existing = pd.read_parquet(OUT_PREISE)
         df_gesamt = pd.concat([df_existing, df_neu], ignore_index=True)
@@ -355,7 +343,6 @@ def update(workers: int, test: bool, no_pull: bool):
     if not no_pull and not test:
         pull_tankerkoenig()
 
-    # UUIDs und letzten Datenpunkt aus bestehendem Parquet lesen
     df_existing = pd.read_parquet(OUT_PREISE, columns=["date", "station_uuid"])
     alle_uuids = set(df_existing["station_uuid"].unique())
     letzter_ts = df_existing["date"].max()
@@ -367,7 +354,6 @@ def update(workers: int, test: bool, no_pull: bool):
 
     df_neu = lade_preise(alle_uuids, ab_datum=ab_datum, workers=workers, test=test)
 
-    # Zusammenführen
     print("\n🔀 Mit bestehenden Daten zusammenführen...")
     df_existing = pd.read_parquet(OUT_PREISE)
     cutoff = pd.Timestamp(ab_datum)
@@ -386,7 +372,6 @@ def update(workers: int, test: bool, no_pull: bool):
 
     _print_summary(df_gesamt, out_pfad)
 
-    # GitHub Actions Output
     if "GITHUB_OUTPUT" in os.environ:
         with open(os.environ["GITHUB_OUTPUT"], "a") as f:
             f.write(f"zeilen={len(df_gesamt)}\n")
@@ -427,9 +412,9 @@ if __name__ == "__main__":
         help="Alle vorhandenen Stationen fortschreiben"
     )
 
-    parser.add_argument("--test",     action="store_true", help=f"Nur {TEST_CSV_ANZAHL} CSVs, kein git pull")
-    parser.add_argument("--no-pull",  action="store_true", help="Kein git pull")
-    parser.add_argument("--workers",  type=int, default=cpu_count(),
+    parser.add_argument("--test",    action="store_true", help=f"Nur {TEST_CSV_ANZAHL} CSVs, kein git pull")
+    parser.add_argument("--no-pull", action="store_true", help="Kein git pull")
+    parser.add_argument("--workers", type=int, default=cpu_count(),
                         help=f"CPU-Kerne (default: {cpu_count()})")
     args = parser.parse_args()
 

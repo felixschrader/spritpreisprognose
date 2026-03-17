@@ -31,42 +31,48 @@ BUNDESLAENDER = {
 
 # Dynamischer Zeitraum: 2014 bis aktuelles Jahr + 2
 START_JAHR = 2014
-END_JAHR = datetime.now().year + 2
-JAHRE = range(START_JAHR, END_JAHR + 1)
-
 BASE_URL = "https://feiertage-api.de/api/"
 
-rows = []
 
-for jahr in JAHRE:
-    print(f"Lade {jahr}...")
-    for kuerzel, name in BUNDESLAENDER.items():
-        params = {"jahr": jahr, "nur_land": kuerzel}
-        response = requests.get(BASE_URL, params=params, timeout=10)
-        response.raise_for_status()
-        daten = response.json()
+def main():
+    end_jahr = datetime.now().year + 2
+    jahre = range(START_JAHR, end_jahr + 1)
+    rows = []
 
-        for feiertag_name, info in daten.items():
-            rows.append({
-                "datum": info["datum"],
-                "name": feiertag_name,
-                "bundesland_kuerzel": kuerzel,
-                "bundesland_name": name,
-                "hinweis": info.get("hinweis", ""),
-            })
+    for jahr in jahre:
+        print(f"Lade {jahr}...")
+        for kuerzel, name in BUNDESLAENDER.items():
+            params = {"jahr": jahr, "nur_land": kuerzel}
+            response = requests.get(BASE_URL, params=params, timeout=10)
+            response.raise_for_status()
+            daten = response.json()
 
-df = pd.DataFrame(rows)
-df["datum"] = pd.to_datetime(df["datum"])
-df = df.sort_values(["datum", "bundesland_kuerzel"]).reset_index(drop=True)
+            for feiertag_name, info in daten.items():
+                rows.append({
+                    "datum": info["datum"],
+                    "name": feiertag_name,
+                    "bundesland_kuerzel": kuerzel,
+                    "bundesland_name": name,
+                    "hinweis": info.get("hinweis", ""),
+                })
 
-Path("data").mkdir(exist_ok=True)
-df.to_csv("data/feiertage.csv", index=False)
+    df = pd.DataFrame(rows)
+    df["datum"] = pd.to_datetime(df["datum"])
+    df = df.sort_values(["datum", "bundesland_kuerzel"]).reset_index(drop=True)
 
-print(f"✅ {len(df)} Einträge gespeichert → data/feiertage.csv")
-print(f"   Zeitraum: {START_JAHR}–{END_JAHR}")
+    Path("data").mkdir(exist_ok=True)
+    df.to_csv("data/feiertage.csv", index=False)
 
-# Outputs für GitHub Actions
-if "GITHUB_OUTPUT" in os.environ:
-    with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-        f.write(f"eintraege={len(df)}\n")
-        f.write(f"jahre={START_JAHR}-{END_JAHR}\n")
+    print(f"✅ {len(df)} Einträge gespeichert → data/feiertage.csv")
+    print(f"   Zeitraum: {START_JAHR}–{end_jahr}")
+
+    # Outputs für GitHub Actions
+    if "GITHUB_OUTPUT" in os.environ:
+        with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+            f.write(f"eintraege={len(df)}\n")
+            f.write(f"jahre={START_JAHR}-{end_jahr}\n")
+
+
+# FIX: main() Guard — verhindert dass der API-Abruf beim Import ausgeführt wird
+if __name__ == "__main__":
+    main()

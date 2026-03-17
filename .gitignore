@@ -62,4 +62,5 @@ logs/
 # === Modelle ===
 models/
 *.model
-*.joblib!.env.template
+*.joblib
+!.env.template

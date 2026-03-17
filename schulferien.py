@@ -34,58 +34,64 @@ BUNDESLAENDER = {
 
 # Dynamischer Zeitraum: 2014 bis aktuelles Jahr + 2
 START_JAHR = 2014
-END_JAHR = datetime.now().year + 2
-
 BASE_URL = "https://openholidaysapi.org/SchoolHolidays"
 
-rows = []
 
-for jahr in range(START_JAHR, END_JAHR + 1):
-    print(f"Lade {jahr}...")
-    for code, name in BUNDESLAENDER.items():
-        params = {
-            "countryIsoCode": "DE",
-            "subdivisionCode": code,
-            "validFrom": f"{jahr}-01-01",
-            "validTo": f"{jahr}-12-31",
-            "languageIsoCode": "DE",
-        }
-        response = requests.get(BASE_URL, params=params, timeout=10)
-        response.raise_for_status()
-        daten = response.json()
+def main():
+    end_jahr = datetime.now().year + 2
+    rows = []
 
-        for eintrag in daten:
-            # Ferienname extrahieren (deutschsprachig)
-            ferienname = next(
-                (n["text"] for n in eintrag["name"] if n["language"] == "DE"),
-                eintrag["name"][0]["text"] if eintrag["name"] else ""
-            )
-            rows.append({
-                "datum_start": eintrag["startDate"],
-                "datum_ende": eintrag["endDate"],
-                "name": ferienname,
-                "bundesland_code": code,
-                "bundesland_name": name,
-            })
+    for jahr in range(START_JAHR, end_jahr + 1):
+        print(f"Lade {jahr}...")
+        for code, name in BUNDESLAENDER.items():
+            params = {
+                "countryIsoCode": "DE",
+                "subdivisionCode": code,
+                "validFrom": f"{jahr}-01-01",
+                "validTo": f"{jahr}-12-31",
+                "languageIsoCode": "DE",
+            }
+            response = requests.get(BASE_URL, params=params, timeout=10)
+            response.raise_for_status()
+            daten = response.json()
 
-df = pd.DataFrame(rows)
-df["datum_start"] = pd.to_datetime(df["datum_start"])
-df["datum_ende"] = pd.to_datetime(df["datum_ende"])
-df = df.sort_values(["datum_start", "bundesland_code"]).reset_index(drop=True)
+            for eintrag in daten:
+                # Ferienname extrahieren (deutschsprachig)
+                ferienname = next(
+                    (n["text"] for n in eintrag["name"] if n["language"] == "DE"),
+                    eintrag["name"][0]["text"] if eintrag["name"] else ""
+                )
+                rows.append({
+                    "datum_start": eintrag["startDate"],
+                    "datum_ende": eintrag["endDate"],
+                    "name": ferienname,
+                    "bundesland_code": code,
+                    "bundesland_name": name,
+                })
 
-# Duplikate entfernen — Ferien die über Jahresgrenzen gehen
-# werden durch die jahresweise Abfrage doppelt erfasst
-df = df.drop_duplicates(subset=["datum_start", "datum_ende", "bundesland_code"])
-df = df.reset_index(drop=True)
+    df = pd.DataFrame(rows)
+    df["datum_start"] = pd.to_datetime(df["datum_start"])
+    df["datum_ende"] = pd.to_datetime(df["datum_ende"])
+    df = df.sort_values(["datum_start", "bundesland_code"]).reset_index(drop=True)
 
-Path("data").mkdir(exist_ok=True)
-df.to_csv("data/schulferien.csv", index=False)
+    # Duplikate entfernen — Ferien die über Jahresgrenzen gehen
+    # werden durch die jahresweise Abfrage doppelt erfasst
+    df = df.drop_duplicates(subset=["datum_start", "datum_ende", "bundesland_code"])
+    df = df.reset_index(drop=True)
 
-print(f"✅ {len(df)} Einträge gespeichert → data/schulferien.csv")
-print(f"   Zeitraum: {START_JAHR}–{END_JAHR}")
+    Path("data").mkdir(exist_ok=True)
+    df.to_csv("data/schulferien.csv", index=False)
 
-# Outputs für GitHub Actions
-if "GITHUB_OUTPUT" in os.environ:
-    with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-        f.write(f"eintraege={len(df)}\n")
-        f.write(f"jahre={START_JAHR}-{END_JAHR}\n")
+    print(f"✅ {len(df)} Einträge gespeichert → data/schulferien.csv")
+    print(f"   Zeitraum: {START_JAHR}–{end_jahr}")
+
+    # Outputs für GitHub Actions
+    if "GITHUB_OUTPUT" in os.environ:
+        with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+            f.write(f"eintraege={len(df)}\n")
+            f.write(f"jahre={START_JAHR}-{end_jahr}\n")
+
+
+# FIX: main() Guard — verhindert dass der API-Abruf beim Import ausgeführt wird
+if __name__ == "__main__":
+    main()
