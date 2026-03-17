@@ -78,3 +78,6 @@ pyarrow>=12.0
 
 # openpyxl: Excel-Dateien lesen/schreiben
 # openpyxl>=3.1
+
+# tqdm: Fortschrittsbalken mit ETA — für tankerkoenig_pipeline.py
+tqdm>=4.0
