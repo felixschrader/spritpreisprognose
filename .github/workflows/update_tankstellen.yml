@@ -43,4 +43,4 @@ jobs:
             --depth 1 \
             --filter=blob:none \
             --sparse \
-            https://${{ secrets.TANKERKOENIG_USER }}:${{ secrets.TANKERKOENIG_KEY }}@data.tankerkoenig.de/tankerkoenig-organization/t
+            https://${{ secrets.TANKERKOENIG_USER }}:${{ secrets.TANKERKOENIG_KEY }}@data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data.git \
