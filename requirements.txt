@@ -7,6 +7,7 @@ numpy>=1.24
 pandas-datareader
 plotly
 pytz
+yfinance
 
 # Analyse & Visualisierung
 matplotlib>=3.7
@@ -23,6 +24,6 @@ python-dotenv>=1.0
 # scikit-learn>=1.3
 
 # Optional: Daten laden
-# requests>=2.31
+requests>=2.31
 # openpyxl>=3.1   # Excel
 # pyarrow>=12.0   # Parquet
