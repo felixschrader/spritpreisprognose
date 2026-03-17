@@ -35,10 +35,9 @@ jobs:
 
       - name: Test Tankerkönig URL
         run: |
-          # Erst klonen ohne checkout um den default branch zu sehen
           git ls-remote \
             https://${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}@data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data.git \
-            HEAD
+            "HEAD" "refs/heads/*"
         env:
           TANKERKOENIG_USER: ${{ secrets.TANKERKOENIG_USER }}
           TANKERKOENIG_KEY: ${{ secrets.TANKERKOENIG_KEY }}
