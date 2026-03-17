@@ -33,25 +33,22 @@ jobs:
           echo "TANKERKOENIG_KEY=${{ secrets.TANKERKOENIG_KEY }}" >> .env
           echo "SLACK_WEBHOOK=${{ secrets.SLACK_WEBHOOK }}" >> .env
 
-      - name: Clone Tankerkönig (sparse — nur heute + gestern)
+      - name: Download Tankerkönig CSVs (heute + gestern)
         run: |
-          TODAY_Y=$(date +%Y)
-          TODAY_M=$(date +%m)
-          YEST_Y=$(date -d "yesterday" +%Y)
-          YEST_M=$(date -d "yesterday" +%m)
-          REPO_URL="https://${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}@data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data.git"
-          git clone --depth 1 --filter=blob:none --sparse "$REPO_URL" /tmp/tankerkoenig-data
-          cd /tmp/tankerkoenig-data
-          git sparse-checkout set \
-            stations \
-            "prices/${TODAY_Y}/${TODAY_M}" \
-            "prices/${YEST_Y}/${YEST_M}"
+          for DATE in $(date +%Y-%m-%d) $(date -d "yesterday" +%Y-%m-%d); do
+            YEAR=$(echo $DATE | cut -d- -f1)
+            MONTH=$(echo $DATE | cut -d- -f2)
+            mkdir -p /tmp/tankerkoenig-data/prices/${YEAR}/${MONTH}
+            curl -u "${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}" -fsSL \
+              "https://data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data/-/raw/master/prices/${YEAR}/${MONTH}/${DATE}-prices.csv" \
+              -o "/tmp/tankerkoenig-data/prices/${YEAR}/${MONTH}/${DATE}-prices.csv" \
+              && echo "✅ ${DATE}" || echo "❌ ${DATE} fehlgeschlagen"
+          done
+          mkdir -p /tmp/tankerkoenig-data/stations
+          curl -u "${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}" -fsSL \
+            "https://data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data/-/raw/master/stations/stations.csv" \
+            -o "/tmp/tankerkoenig-data/stations/stations.csv" \
+            && echo "✅ stations.csv" || echo "❌ stations.csv fehlgeschlagen"
         env:
           TANKERKOENIG_USER: ${{ secrets.TANKERKOENIG_USER }}
           TANKERKOENIG_KEY: ${{ secrets.TANKERKOENIG_KEY }}
-
-      - name: Run pipeline update
-        id: pipeline
-        env:
-          TANKERKOENIG_DATA_ROOT: /tmp/tankerkoenig-data
-        run: python tankerkoenig_pipeline.py --update --no-pull
