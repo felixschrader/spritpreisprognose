@@ -1,0 +1,68 @@
+# .github/workflows/update_wetter.yml
+#
+# Lädt tägliche Wetterdaten der Station Köln/Bonn Flughafen (DWD ID 02667)
+# vom DWD CDC OpenData Server — kostenlos, kein API-Key nötig.
+#
+# Die Station ist ein Proxy für das Kölner Stadtgebiet und liefert
+# Temperaturdaten für die Modellierung saisonaler Nachfrageschwankungen.
+# Läuft täglich 30 Minuten nach dem Tankstellen-Update.
+
+name: Wetterdaten aktualisieren
+
+on:
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      - run: pip install -r requirements.txt
+
+      # Lädt historical + recent vom DWD CDC OpenData Server.
+      # Die historical-URL wird dynamisch aus dem Directory-Listing
+      # ermittelt — kein manuelles Update bei jährlichen DWD-Änderungen nötig.
+      - name: Run wetter update
+        id: wetter
+        run: python wetter_koeln.py
+
+      - name: Commit and push to main
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add data/wetter_koeln.csv
+          git status --porcelain | grep -q . \
+            && git commit -m "data: Wetter Köln/Bonn update $(TZ='Europe/Berlin' date +'%Y-%m-%d %H:%M')" \
+            && git push origin main \
+            || echo "Keine Änderungen — kein Commit nötig"
+
+      - name: Send Slack Notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
+          SLACK_TITLE: "Wetter-Update Köln/Bonn"
+          SLACK_MESSAGE: |
+            *Status:* ${{ job.status == 'success' && '✅ Erfolgreich' || '❌ Fehlgeschlagen' }}
+            *Temperatur:* ${{ steps.wetter.outputs.last_temp }}°C
+            *Zeilen:* ${{ steps.wetter.outputs.rows }}
+          SLACK_FOOTER: "GitHub Actions | Wetter-Bot"

@@ -1,0 +1,4 @@
+datum_start,datum_ende,bezeichnung,benzin_ct_pro_liter,diesel_ct_pro_liter,quelle
+2003-01-01,2022-05-31,Normalsatz,65.45,47.04,Energiesteuergesetz §2 Abs.1 Nr.1+4
+2022-06-01,2022-08-31,Tankrabatt (EnergieStSenkG),35.90,33.00,BGBl. I 2022 S.698 / Bundestag 20/1741
+2022-09-01,9999-12-31,Normalsatz,65.45,47.04,Energiesteuergesetz §2 Abs.1 Nr.1+4
