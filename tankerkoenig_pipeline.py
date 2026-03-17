@@ -44,19 +44,21 @@ load_dotenv()
 # Neue Stadt hier eintragen, dann mit --add-stadt laden
 # =============================================================================
 
-STADT_PLZ_PREFIXES: dict[str, tuple] = {
-    "koeln":      ("50", "51"),
-    "berlin":     ("10", "11", "12", "13", "14"),
-    "hamburg":    ("20", "21", "22"),
-    "muenchen":   ("80", "81", "82", "85"),
-    "frankfurt":  ("60", "61", "63", "65"),
-    "stuttgart":  ("70", "71"),
-    "dusseldorf": ("40", "41"),
-    "dortmund":   ("44",),
-    "essen":      ("45",),
-    "bremen":     ("28",),
-    "leipzig":    ("04",),
-    "nuernberg":  ("90",),
+# Stadtdefinitionen: Referenzpunkt (lat/lon) + Radius in km
+# Neue Stadt einfach hier eintragen
+STADT_CONFIGS: dict[str, dict] = {
+    "koeln":      {"lat": 50.919537, "lon": 6.852624, "radius_km": 5,  "label": "Köln (Aral Dürener Str. 407)"},
+    "berlin":     {"lat": 52.520008, "lon": 13.404954, "radius_km": 15, "label": "Berlin"},
+    "hamburg":    {"lat": 53.550341, "lon": 10.000654, "radius_km": 15, "label": "Hamburg"},
+    "muenchen":   {"lat": 48.137154, "lon": 11.576124, "radius_km": 15, "label": "München"},
+    "frankfurt":  {"lat": 50.110924, "lon": 8.682127,  "radius_km": 10, "label": "Frankfurt"},
+    "stuttgart":  {"lat": 48.775846, "lon": 9.182932,  "radius_km": 10, "label": "Stuttgart"},
+    "dusseldorf": {"lat": 51.227741, "lon": 6.773456,  "radius_km": 10, "label": "Düsseldorf"},
+    "dortmund":   {"lat": 51.513587, "lon": 7.465298,  "radius_km": 10, "label": "Dortmund"},
+    "essen":      {"lat": 51.455643, "lon": 7.011555,  "radius_km": 10, "label": "Essen"},
+    "bremen":     {"lat": 53.079296, "lon": 8.801694,  "radius_km": 10, "label": "Bremen"},
+    "leipzig":    {"lat": 51.339695, "lon": 12.373075, "radius_km": 10, "label": "Leipzig"},
+    "nuernberg":  {"lat": 49.452030, "lon": 11.076750, "radius_km": 10, "label": "Nürnberg"},
 }
 
 
@@ -119,15 +121,44 @@ def pull_tankerkoenig():
 # Schritt 1: Stationen laden
 # =============================================================================
 
+def haversine(lat1: float, lon1: float, lat2, lon2) -> "pd.Series":
+    """
+    Berechnet die Entfernung in km zwischen zwei GPS-Koordinaten.
+    Haversine-Formel: berücksichtigt die Erdkrümmung.
+    lat2/lon2 können pandas Series sein (vektorisiert).
+    """
+    import numpy as np
+    R = 6371  # Erdradius in km
+    dlat = np.radians(lat2 - lat1)
+    dlon = np.radians(lon2 - lon1)
+    a = np.sin(dlat/2)**2 + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2)) * np.sin(dlon/2)**2
+    return R * 2 * np.arcsin(np.sqrt(a))
+
+
 def lade_stationen_fuer_stadt(stadtname: str) -> pd.DataFrame:
-    """Lädt Stationen für eine Stadt anhand PLZ-Präfixe."""
-    plz_prefixes = STADT_PLZ_PREFIXES[stadtname]
+    """
+    Lädt alle Tankstellen im Umkreis des Referenzpunkts der Stadt.
+    Filter: Haversine-Distanz <= radius_km.
+    Präziser als PLZ oder city-Match.
+    """
+    config = STADT_CONFIGS[stadtname]
+    ref_lat, ref_lon, radius_km = config["lat"], config["lon"], config["radius_km"]
+
     stationen = pd.read_csv(STATIONS_CSV, dtype={"post_code": str, "uuid": str})
-    result = stationen[
-        stationen["post_code"].str.startswith(plz_prefixes, na=False)
-    ].copy()
-    # Stadt als Spalte — für spätere Filterung im Parquet
+
+    # Entfernung zum Referenzpunkt berechnen
+    stationen["distanz_km"] = haversine(
+        ref_lat, ref_lon,
+        stationen["latitude"], stationen["longitude"]
+    )
+
+    # Auf Umkreis filtern
+    result = stationen[stationen["distanz_km"] <= radius_km].copy()
     result["stadt"] = stadtname
+
+    print(f"   Referenzpunkt: {config['label']} ({ref_lat}, {ref_lon}), Radius: {radius_km} km")
+    print(f"   {len(result)} Stationen im Umkreis gefunden")
+
     return result
 
 
@@ -241,7 +272,7 @@ def add_stadt(stadtname: str, workers: int, test: bool, no_pull: bool):
     Lädt komplette History für eine neue Stadt und fügt sie ins Parquet ein.
     Bereits vorhandene UUIDs werden nicht doppelt gespeichert.
     """
-    if stadtname not in STADT_PLZ_PREFIXES:
+    if stadtname not in STADT_CONFIGS:
         raise ValueError(
             f"'{stadtname}' nicht in STADT_PLZ_PREFIXES.\n"
             f"Verfügbar: {', '.join(sorted(STADT_PLZ_PREFIXES.keys()))}"
@@ -266,7 +297,7 @@ def add_stadt(stadtname: str, workers: int, test: bool, no_pull: bool):
         print("ℹ️  Alle Stationen bereits vorhanden — nichts zu tun.")
         return
 
-    if not no_pull:
+    if not no_pull and not test:
         pull_tankerkoenig()
 
     # Preise für neue Stationen laden
@@ -318,7 +349,7 @@ def update(workers: int, test: bool, no_pull: bool):
             "Erst mit --add-stadt eine Stadt laden."
         )
 
-    if not no_pull:
+    if not no_pull and not test:
         pull_tankerkoenig()
 
     # UUIDs und letzten Datenpunkt aus bestehendem Parquet lesen
@@ -384,8 +415,8 @@ if __name__ == "__main__":
     gruppe.add_argument(
         "--add-stadt",
         metavar="STADT",
-        choices=sorted(STADT_PLZ_PREFIXES.keys()),
-        help=f"Neue Stadt laden: {', '.join(sorted(STADT_PLZ_PREFIXES.keys()))}"
+        choices=sorted(STADT_CONFIGS.keys()),
+        help=f"Neue Stadt laden: {', '.join(sorted(STADT_CONFIGS.keys()))}"
     )
     gruppe.add_argument(
         "--update",
