@@ -39,8 +39,19 @@ jobs:
           TODAY_M=$(date +%m)
           YEST_Y=$(date -d "yesterday" +%Y)
           YEST_M=$(date -d "yesterday" +%m)
-          git clone \
-            --depth 1 \
-            --filter=blob:none \
-            --sparse \
-            https://${{ secrets.TANKERKOENIG_USER }}:${{ secrets.TANKERKOENIG_KEY }}@data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data.git \
+          REPO_URL="https://${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}@data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data.git"
+          git clone --depth 1 --filter=blob:none --sparse "$REPO_URL" /tmp/tankerkoenig-data
+          cd /tmp/tankerkoenig-data
+          git sparse-checkout set \
+            stations \
+            "prices/${TODAY_Y}/${TODAY_M}" \
+            "prices/${YEST_Y}/${YEST_M}"
+        env:
+          TANKERKOENIG_USER: ${{ secrets.TANKERKOENIG_USER }}
+          TANKERKOENIG_KEY: ${{ secrets.TANKERKOENIG_KEY }}
+
+      - name: Run pipeline update
+        id: pipeline
+        env:
+          TANKERKOENIG_DATA_ROOT: /tmp/tankerkoenig-data
+        run: python tankerkoenig_pipeline.py --update --no-pull
