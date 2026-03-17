@@ -8,6 +8,7 @@ Analyse und Prognose von Kraftstoffpreisen an deutschen Tankstellen — Abschlus
 
 - [Überblick](#überblick)
 - [Projektstruktur](#projektstruktur)
+- [Team](#team)
 - [Installation](#installation)
 - [Verwendung](#verwendung)
 - [Daten](#daten)
@@ -31,10 +32,12 @@ Dieses Projekt untersucht die Preisentwicklung von Kraftstoffen (E10, Diesel) an
 
 | Quelle | Inhalt | Frequenz | Zugang |
 |--------|--------|----------|--------|
-| [Tankerkönig Open Data API](https://creativecommons.tankerkoenig.de/) | Kraftstoffpreise deutscher Tankstellen | täglich (historisch ab 2014) | kostenlos, API-Key nötig |
+| [Tankerkönig Open Data](https://creativecommons.tankerkoenig.de/) | Kraftstoffpreise deutscher Tankstellen | täglich (historisch ab 2014) | kostenlos, API-Key nötig |
 | [Yahoo Finance (BZ=F)](https://finance.yahoo.com/quote/BZ=F) | Brent Crude Oil Futures — täglich seit 2014 | täglich | kostenlos, kein Key |
 | [Yahoo Finance (BZ=F)](https://finance.yahoo.com/quote/BZ=F) | Brent Crude Oil Futures — stündlich | stündlich, letzte 60 Tage | kostenlos, kein Key |
 | [EZB Statistical Data Warehouse](https://data-api.ecb.europa.eu) | EUR/USD Referenzkurs | täglich | kostenlos, kein Key |
+| [feiertage-api.de](https://feiertage-api.de/) | Gesetzliche Feiertage alle 16 Bundesländer | jährlich (ab 2014) | kostenlos, kein Key |
+| [OpenHolidays API](https://openholidaysapi.org/) | Schulferien alle 16 Bundesländer | jährlich (ab 2014) | kostenlos, kein Key |
 
 ---
 
@@ -45,16 +48,22 @@ spritpreisprognose/
 │   └── workflows/
 │       ├── update_tankstellen.yml    # GitHub Actions: Tankstellen-Update täglich 5:00 Uhr
 │       ├── update_brent_prices.yml   # GitHub Actions: Brent-Update 2x täglich
-│       └── update_eur_usd.yml        # GitHub Actions: EUR/USD-Update 2x täglich
+│       ├── update_eur_usd.yml        # GitHub Actions: EUR/USD-Update 2x täglich
+│       ├── update_feiertage.yml      # GitHub Actions: Feiertage-Update jährlich
+│       └── update_schulferien.yml    # GitHub Actions: Schulferien-Update jährlich
 ├── data/
 │   ├── tankstellen_preise.parquet    # Kraftstoffpreise, 2,4 Mio. Zeilen ab 2014 (auto-update)
 │   ├── tankstellen_stationen.parquet # 30 Tankstellen im 5 km-Umkreis Köln (auto-update)
 │   ├── brent_futures_daily.csv       # Brent Futures, täglich seit 2014 (auto-update)
 │   ├── brent_futures_intraday_1h.csv # Brent Futures, stündlich letzte 60 Tage (auto-update)
-│   └── eur_usd_rate.csv              # EUR/USD Referenzkurs, täglich (auto-update)
+│   ├── eur_usd_rate.csv              # EUR/USD Referenzkurs, täglich (auto-update)
+│   ├── feiertage.csv                 # Gesetzliche Feiertage, alle 16 BL, ab 2014 (auto-update)
+│   └── schulferien.csv               # Schulferien, alle 16 BL, ab 2014 (auto-update)
 ├── papers/                           # Fachliteratur & Referenzen
 ├── brent_price.py                    # Brent-Datenabruf (Yahoo Finance BZ=F)
 ├── eur_usd_rate.py                   # EUR/USD-Datenabruf (EZB API)
+├── feiertage.py                      # Feiertage-Abruf (feiertage-api.de)
+├── schulferien.py                    # Schulferien-Abruf (OpenHolidays API)
 ├── tankerkoenig_pipeline.py          # ETL-Pipeline: Tankerkönig CSV → Parquet
 ├── .env.template                     # Vorlage für API-Keys (nie .env committen!)
 ├── .gitignore
@@ -68,9 +77,9 @@ spritpreisprognose/
 
 | Name | GitHub | Schwerpunkt |
 |------|--------|-------------|
-| Felix Schrader | [@felixschrader](https://github.com/felixschrader) | ML, Infrastruktur |
-| Girandoux Fandio Nganwajop | [@Girandoux](https://github.com/Girandoux) | — |
-| Ghislain Wamo | [@GhislainWamo](https://github.com/GhislainWamo) | — |
+| Felix Schrader | [@felixschrader](https://github.com/felixschrader) | Infrastruktur, Data Mining, Automatisierung, ML, Dashboard (tba) |
+| Girandoux Fandio Nganwajop | [@Girandoux](https://github.com/Girandoux) | ETL, EDA, Datenbank, Dashboard (tba) |
+| Ghislain Wamo | [@GhislainWamo](https://github.com/GhislainWamo) | ETL, EDA, Datenbank, Dashboard (tba) |
 
 ---
 
@@ -105,6 +114,12 @@ python eur_usd_rate.py
 
 # Tankstellen-Pipeline manuell ausführen
 python tankerkoenig_pipeline.py --update --no-pull
+
+# Feiertage manuell abrufen & CSV aktualisieren
+python feiertage.py
+
+# Schulferien manuell abrufen & CSV aktualisieren
+python schulferien.py
 ```
 
 ---
@@ -159,6 +174,13 @@ df_merged = df.merge(df_stationen, left_on="station_uuid", right_on="uuid")
 > Parquet ist ein spaltenorientiertes Binärformat das gegenüber CSV deutlich kompakter
 > und schneller zu lesen ist — bei 2,4 Mio. Zeilen ein relevanter Unterschied.
 > Voraussetzung: `pyarrow` (bereits in `requirements.txt` enthalten).
+>
+> Falls CSV bevorzugt wird, einmalig lokal konvertieren:
+> ```python
+> df.to_csv("data/tankstellen_preise.csv", index=False)
+> df_stationen.to_csv("data/tankstellen_stationen.csv", index=False)
+> ```
+> ⚠️ Die CSVs bitte nicht committen — zu groß für GitHub.
 
 ### Brent Rohölpreis
 
@@ -178,6 +200,32 @@ Offizieller EZB-Referenzkurs via ECB Statistical Data Warehouse API:
 Rohöl wird global in USD gehandelt. Der EUR/USD-Kurs beeinflusst direkt den Einkaufspreis
 für europäische Raffinerien — und damit die Tankstellenpreise.
 
+### Feiertage
+
+Gesetzliche Feiertage aller 16 Bundesländer via feiertage-api.de (bundesAPI):
+- **`data/feiertage.csv`** — alle Feiertage ab 2014 bis aktuelles Jahr + 2
+
+| Spalte | Typ | Beschreibung |
+|--------|-----|--------------|
+| `datum` | datetime64 | Datum des Feiertags |
+| `name` | string | Name des Feiertags |
+| `bundesland_kuerzel` | string | Kürzel (z.B. NW, BY, BE) |
+| `bundesland_name` | string | Ausgeschriebener Name |
+| `hinweis` | string | Optionaler Hinweis (z.B. nur bestimmte Regionen) |
+
+### Schulferien
+
+Schulferien aller 16 Bundesländer via OpenHolidays API (openholidaysapi.org):
+- **`data/schulferien.csv`** — alle Schulferien ab 2014 bis aktuelles Jahr + 2
+
+| Spalte | Typ | Beschreibung |
+|--------|-----|--------------|
+| `datum_start` | datetime64 | Erster Ferientag |
+| `datum_ende` | datetime64 | Letzter Ferientag |
+| `name` | string | Ferienname (z.B. Sommerferien, Osterferien) |
+| `bundesland_code` | string | ISO-Code (z.B. DE-NW, DE-BY) |
+| `bundesland_name` | string | Ausgeschriebener Name |
+
 ---
 
 ## Automatisierung
@@ -191,6 +239,11 @@ verschickt. Feature-Branches enthalten keine Datendateien, um Merge-Konflikte zu
 | `update_tankstellen.yml` | `tankerkoenig_pipeline.py` | täglich 5:00 Uhr MEZ | `tankstellen_preise.parquet`, `tankstellen_stationen.parquet` |
 | `update_brent_prices.yml` | `brent_price.py` | 8:00 + 20:00 Uhr MEZ | `brent_futures_daily.csv`, `brent_futures_intraday_1h.csv` |
 | `update_eur_usd.yml` | `eur_usd_rate.py` | 9:00 + 21:00 Uhr MEZ | `eur_usd_rate.csv` |
+| `update_feiertage.yml` | `feiertage.py` | jährlich 1. Januar 6:00 UTC | `feiertage.csv` |
+| `update_schulferien.yml` | `schulferien.py` | jährlich 2. Januar 7:00 UTC | `schulferien.csv` |
+
+Der Zeitraum für Feiertage und Schulferien ist dynamisch: immer **aktuelles Jahr + 2**, sodass
+die Workflows niemals manuell angepasst werden müssen.
 
 ### Technische Details
 
@@ -201,7 +254,7 @@ begrenzen, anstatt das gesamte Archiv (mehrere GB) zu übertragen:
 - **`--filter=blob:none` + Sparse Checkout** — überträgt zunächst nur die Verzeichnisstruktur
   und materialisiert anschließend exakt die zwei benötigten Tages-CSVs sowie die Stammdaten
 
-Alle drei Workflows teilen denselben pip-Cache (identischer Hash über `requirements.txt`),
+Alle fünf Workflows teilen denselben pip-Cache (identischer Hash über `requirements.txt`),
 sodass Pakete nicht bei jedem Lauf neu installiert werden müssen.
 
 ---
