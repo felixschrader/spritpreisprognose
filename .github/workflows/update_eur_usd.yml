@@ -27,20 +27,31 @@ jobs:
         with:
           ref: main
 
-      # Schritt 2: Python installieren
+      # Schritt 2: Python-Version festlegen
+      # Konsistent mit der lokalen Entwicklungsumgebung und den übrigen Workflows
       - uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
-      # Schritt 3: Alle Python-Abhängigkeiten installieren
+      # Schritt 3: pip-Cache wiederverwenden
+      # Der Cache wird anhand eines Hashes der requirements.txt identifiziert.
+      # Ändert sich die Datei nicht, werden alle Pakete aus dem Cache geladen
+      # statt neu heruntergeladen — spart ca. 30 Sekunden pro Run.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      # Schritt 4: Abhängigkeiten installieren
+      # Bei Cache-Treffer dauert dieser Schritt nur wenige Sekunden
       - run: pip install -r requirements.txt
 
-      # Schritt 4: Skript ausführen — aktualisiert die CSV
+      # Schritt 5: Skript ausführen — aktualisiert die CSV
       - name: Run analysis
         id: analysis
         run: python eur_usd_rate.py
 
-      # Schritt 5: Geänderte Dateien committen und auf main pushen
+      # Schritt 6: Geänderte Dateien committen und auf main pushen
       # 'git status --porcelain | grep -q .' prüft ob es überhaupt Änderungen gibt
       # Falls nicht → kein leerer Commit
       - name: Commit and push to main
@@ -53,7 +64,7 @@ jobs:
             && git push origin main \
             || echo "Keine Änderungen — kein Commit nötig"
 
-      # Schritt 6: Slack-Benachrichtigung senden
+      # Schritt 7: Slack-Benachrichtigung senden
       # 'if: always()' → auch bei Fehler wird eine Nachricht geschickt
       - name: Send Slack Notification
         if: always()
