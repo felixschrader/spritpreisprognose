@@ -27,12 +27,24 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Debug Tankerkönig URL
+      - name: Download Tankerkönig CSVs
         run: |
-          echo "=== Test 1: Mit verbose ==="
-          curl -v \
-            "https://${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}@data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data/-/raw/master/stations/stations.csv" \
-            2>&1 | head -60
+          git clone \
+            --depth 1 \
+            --no-checkout \
+            --filter=blob:none \
+            https://${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}@data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data.git \
+            /tmp/tk-repo
+          
+          cd /tmp/tk-repo
+          git sparse-checkout set stations/stations.csv
+          
+          TODAY=$(date +%Y/%m/%Y-%m-%d)
+          YESTERDAY=$(date -d "yesterday" +%Y/%m/%Y-%m-%d)
+          git sparse-checkout add prices/${TODAY}-prices.csv
+          git sparse-checkout add prices/${YESTERDAY}-prices.csv
+          
+          git checkout master
         env:
           TANKERKOENIG_USER: ${{ secrets.TANKERKOENIG_USER }}
           TANKERKOENIG_KEY: ${{ secrets.TANKERKOENIG_KEY }}
