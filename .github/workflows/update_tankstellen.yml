@@ -27,23 +27,22 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Test Tankerkönig Dateinamen
+      - name: Download Tankerkönig CSVs
         run: |
-          # Variante 1: YYYY-MM-DD-prices.csv
-          echo "Test 1: YYYY-MM-DD-prices.csv"
-          curl -u "${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}" -o /dev/null -w "%{http_code}" -sL \
-            "https://data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data/-/raw/master/prices/2026/03/2026-03-16-prices.csv"
-          echo ""
-          # Variante 2: prices/YYYY/MM/DD/prices.csv
-          echo "Test 2: prices/2026/03/16/prices.csv"
-          curl -u "${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}" -o /dev/null -w "%{http_code}" -sL \
-            "https://data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data/-/raw/master/prices/2026/03/16/prices.csv"
-          echo ""
-          # Variante 3: ohne Unterordner direkt im prices/
-          echo "Test 3: prices/2026-03-16-prices.csv"  
-          curl -u "${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}" -o /dev/null -w "%{http_code}" -sL \
-            "https://data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data/-/raw/master/prices/2026-03-16-prices.csv"
-          echo ""
+          for DATE in $(date +%Y-%m-%d) $(date -d "yesterday" +%Y-%m-%d); do
+            YEAR=$(echo $DATE | cut -d- -f1)
+            MONTH=$(echo $DATE | cut -d- -f2)
+            mkdir -p /tmp/tankerkoenig-data/prices/${YEAR}/${MONTH}
+            curl -fsSL \
+              "https://${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}@data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data/-/raw/master/prices/${YEAR}/${MONTH}/${DATE}-prices.csv" \
+              -o "/tmp/tankerkoenig-data/prices/${YEAR}/${MONTH}/${DATE}-prices.csv" \
+              && echo "✅ ${DATE}" || echo "❌ ${DATE} fehlgeschlagen"
+          done
+          mkdir -p /tmp/tankerkoenig-data/stations
+          curl -fsSL \
+            "https://${TANKERKOENIG_USER}:${TANKERKOENIG_KEY}@data.tankerkoenig.de/tankerkoenig-organization/tankerkoenig-data/-/raw/master/stations/stations.csv" \
+            -o "/tmp/tankerkoenig-data/stations/stations.csv" \
+            && echo "✅ stations.csv" || echo "❌ stations.csv fehlgeschlagen"
         env:
           TANKERKOENIG_USER: ${{ secrets.TANKERKOENIG_USER }}
           TANKERKOENIG_KEY: ${{ secrets.TANKERKOENIG_KEY }}
