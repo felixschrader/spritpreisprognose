@@ -1,0 +1,89 @@
+# .github/workflows/update_brent_prices.yml
+#
+# Dieser Workflow läuft automatisch und aktualisiert die Brent-Preisdaten.
+# Er checkt immer 'main' aus und pusht auch direkt auf 'main' —
+# so entstehen keine Merge-Konflikte mit Feature-Branches.
+
+name: Brent Preise aktualisieren
+
+on:
+  schedule:
+    # Läuft zweimal täglich: 8:00 und 20:00 Uhr Berliner Zeit
+    # Cron-Syntax: Minute Stunde Tag Monat Wochentag (immer UTC!)
+    # MEZ = UTC+1, MESZ = UTC+2 — hier UTC+1 (Winterzeit als Basis)
+    - cron: '0 7,19 * * *'
+  workflow_dispatch:  # Manueller Start über GitHub UI jederzeit möglich
+
+permissions:
+  contents: write  # Nötig damit der Workflow Dateien committen und pushen darf
+
+jobs:
+  update:
+    runs-on: ubuntu-latest  # Frische Linux-Umgebung bei jedem Lauf
+
+    steps:
+      # Schritt 1: Repository auschecken — explizit 'main'
+      # So arbeitet der Workflow immer auf main, egal von wo er getriggert wird
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      # Schritt 2: Python-Version festlegen
+      # Konsistent mit der lokalen Entwicklungsumgebung und den übrigen Workflows
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      # Schritt 3: pip-Cache wiederverwenden
+      # Der Cache wird anhand eines Hashes der requirements.txt identifiziert.
+      # Ändert sich die Datei nicht, werden alle Pakete aus dem Cache geladen
+      # statt neu heruntergeladen — spart ca. 30 Sekunden pro Run.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      # Schritt 4: Abhängigkeiten installieren
+      # Bei Cache-Treffer dauert dieser Schritt nur wenige Sekunden
+      - run: pip install -r requirements.txt
+
+      # Schritt 5: .env-Datei mit Secrets erstellen
+      # Secrets werden in GitHub unter Settings → Secrets and variables → Actions gepflegt
+      # NIEMALS direkt in den Code oder ins Repo schreiben!
+      - name: Create .env file
+        run: |
+          echo "SLACK_WEBHOOK=${{ secrets.SLACK_WEBHOOK }}" >> .env
+
+      # Schritt 6: Skript ausführen — aktualisiert die CSVs
+      - name: Run analysis
+        id: analysis
+        run: python brent_price.py
+
+      # Schritt 7: Geänderte Dateien committen und auf main pushen
+      # 'git status --porcelain | grep -q .' prüft ob es überhaupt Änderungen gibt
+      # Falls nicht → kein leerer Commit
+      - name: Commit and push to main
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add data/
+          git status --porcelain | grep -q . \
+            && git commit -m "data: Brent update $(TZ='Europe/Berlin' date +'%Y-%m-%d %H:%M')" \
+            && git push origin main \
+            || echo "Keine Änderungen — kein Commit nötig"
+
+      # Schritt 8: Slack-Benachrichtigung senden
+      # 'if: always()' → auch bei Fehler wird eine Nachricht geschickt
+      - name: Send Slack Notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
+          SLACK_TITLE: "Brent Preis-Update"
+          SLACK_MESSAGE: |
+            *Status:* ${{ job.status == 'success' && '✅ Erfolgreich' || '❌ Fehlgeschlagen' }}
+            *Zeit:* ${{ steps.analysis.outputs.updated }}
+            *Preis:* ${{ steps.analysis.outputs.last_price }} USD
+            *Trend:* ${{ steps.analysis.outputs.trend }}
+          SLACK_FOOTER: "GitHub Actions | Brent-Preis-Bot"

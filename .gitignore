@@ -23,9 +23,7 @@ ENV/
 # Rohdaten (oft zu groß / sensibel für Git)
 data/raw/
 data/external/
-*.csv
 *.tsv
-*.parquet
 *.feather
 *.h5
 *.hdf5
@@ -33,21 +31,6 @@ data/external/
 *.pickle
 *.db
 *.sqlite
-
-# Outputs / Artefakte
-data/processed/
-data/interim/
-outputs/
-results/
-reports/figures/
-*.png
-*.jpg
-*.pdf
-
-# Modelle
-models/
-*.model
-*.joblib
 
 # === Umgebungsvariablen & Secrets ===
 .env
@@ -75,3 +58,9 @@ htmlcov/
 # === Logs ===
 *.log
 logs/
+
+# === Modelle ===
+models/
+*.model
+*.joblib
+!.env.template

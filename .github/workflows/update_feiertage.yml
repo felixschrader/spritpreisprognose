@@ -1,0 +1,73 @@
+# .github/workflows/update_feiertage.yml
+#
+# Lädt alle deutschen Feiertage (2014–2027) nach Bundesland
+# via feiertage-api.de — kein API-Key nötig.
+# Da sich Feiertage nicht täglich ändern, läuft dieser Workflow
+# nur einmal jährlich im Januar sowie auf manuellem Aufruf.
+
+name: Feiertage aktualisieren
+
+on:
+  schedule:
+    # Einmal jährlich, 1. Januar um 6:00 Uhr UTC
+    - cron: '0 6 1 1 *'
+  workflow_dispatch:  # Manueller Start jederzeit möglich
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Schritt 1: Repository auschecken
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      # Schritt 2: Python-Version festlegen
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      # Schritt 3: pip-Cache wiederverwenden
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      # Schritt 4: Abhängigkeiten installieren
+      - run: pip install -r requirements.txt
+
+      # Schritt 5: Feiertage abrufen und als CSV speichern
+      # Lädt alle 16 Bundesländer + national für 2014–2027
+      # von feiertage-api.de (bundesAPI, kostenlos, kein Key nötig)
+      - name: Run feiertage update
+        id: feiertage
+        run: python feiertage.py
+
+      # Schritt 6: CSV committen und pushen
+      - name: Commit and push to main
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add data/feiertage.csv
+          git status --porcelain | grep -q . \
+            && git commit -m "data: Feiertage update $(TZ='Europe/Berlin' date +'%Y-%m-%d %H:%M')" \
+            && git push origin main \
+            || echo "Keine Änderungen — kein Commit nötig"
+
+      # Schritt 7: Slack-Benachrichtigung
+      - name: Send Slack Notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
+          SLACK_TITLE: "Feiertage-Update"
+          SLACK_MESSAGE: |
+            *Status:* ${{ job.status == 'success' && '✅ Erfolgreich' || '❌ Fehlgeschlagen' }}
+            *Einträge:* ${{ steps.feiertage.outputs.eintraege }}
+            *Zeitraum:* ${{ steps.feiertage.outputs.jahre }}
+          SLACK_FOOTER: "GitHub Actions | Feiertage-Bot"

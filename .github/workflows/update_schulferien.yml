@@ -1,0 +1,78 @@
+# .github/workflows/update_schulferien.yml
+#
+# Lädt alle deutschen Schulferien (2014 bis aktuelles Jahr + 2) nach Bundesland
+# via OpenHolidays API (openholidaysapi.org) — kein API-Key nötig.
+# Läuft einmal jährlich im Januar sowie auf manuellem Aufruf.
+# Der Zeitraum ist dynamisch: immer aktuelles Jahr + 2, sodass
+# der Workflow niemals manuell angepasst werden muss.
+
+name: Schulferien aktualisieren
+
+on:
+  schedule:
+    # Einmal jährlich, 2. Januar um 7:00 Uhr UTC
+    # (einen Tag nach den Feiertagen, damit die API die neuen Daten hat)
+    - cron: '0 7 2 1 *'
+  workflow_dispatch:  # Manueller Start jederzeit möglich
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Schritt 1: Repository auschecken
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      # Schritt 2: Python-Version festlegen
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      # Schritt 3: pip-Cache wiederverwenden
+      # Gleicher Cache-Key wie alle anderen Workflows — kein doppelter Download
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      # Schritt 4: Abhängigkeiten installieren
+      - run: pip install -r requirements.txt
+
+      # Schritt 5: Schulferien abrufen und als CSV speichern
+      # Lädt alle 16 Bundesländer für 2014 bis aktuelles Jahr + 2
+      # von openholidaysapi.org — jahresweise wegen API-Limit (max. 3 Jahre pro Anfrage)
+      # Ferien die über Jahresgrenzen gehen (z.B. Weihnachtsferien)
+      # werden automatisch dedupliziert
+      - name: Run schulferien update
+        id: schulferien
+        run: python schulferien.py
+
+      # Schritt 6: CSV committen und pushen
+      - name: Commit and push to main
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add data/schulferien.csv
+          git status --porcelain | grep -q . \
+            && git commit -m "data: Schulferien update $(TZ='Europe/Berlin' date +'%Y-%m-%d %H:%M')" \
+            && git push origin main \
+            || echo "Keine Änderungen — kein Commit nötig"
+
+      # Schritt 7: Slack-Benachrichtigung
+      - name: Send Slack Notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
+          SLACK_TITLE: "Schulferien-Update"
+          SLACK_MESSAGE: |
+            *Status:* ${{ job.status == 'success' && '✅ Erfolgreich' || '❌ Fehlgeschlagen' }}
+            *Einträge:* ${{ steps.schulferien.outputs.eintraege }}
+            *Zeitraum:* ${{ steps.schulferien.outputs.jahre }}
+          SLACK_FOOTER: "GitHub Actions | Schulferien-Bot"
