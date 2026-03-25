@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-03-25 23:57",
+  "station_uuid": "e1aefc4e-3ca1-4018-8d91-455b69d35d41",
+  "station": "ARAL Dürener Str. 407",
+  "preis_aktuell": 2.2790000438690186,
+  "mean_24h_rueck": 2.240999937057495,
+  "abweichung_t0_24h": 0.03799999877810478,
+  "dip_oder_peak": "Peak",
+  "richtung_24h": "fällt",
+  "konfidenz": 57.1,
+  "delta_erwartet": 0.0415,
+  "volatilitaet_7d": 0.0583,
+  "empfehlung": "🟡 Morgen tanken",
+  "begruendung": "Aktuell im Peak — Preis fällt in den nächsten 24h",
+  "modell_accuracy": 65.16
+}
