@@ -39,10 +39,8 @@ def lade_preisverlauf():
     df = df[df["diesel"].notna()].copy()
     df["date"] = pd.to_datetime(df["date"])
     df = df.sort_values("date")
-    df["bin3h"] = df["date"].dt.floor("3h")
-    df = df.groupby("bin3h").agg(preis=("diesel", "mean")).reset_index()
-    df = df.rename(columns={"bin3h": "stunde"})
-    return df
+    df = df.rename(columns={"date": "stunde", "diesel": "preis"})
+    return df[["stunde", "preis"]]
 
 @st.cache_data(ttl=60)
 def lade_live_log():
@@ -249,7 +247,7 @@ fig.add_trace(go.Scatter(
     y=df_hist["preis"],
     mode="lines",
     name="Preisverlauf",
-    line=dict(color="#aaaaaa", width=1.5, shape="hv"),
+    line=dict(color="#aaaaaa", width=1.5, shape="linear"),
 ))
 
 # 24h-Mittel — blau, Stufenlinie
