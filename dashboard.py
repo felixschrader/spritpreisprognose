@@ -91,17 +91,22 @@ vorlage_delta = vorlage_ende - vorlage_start
 if vorlage_delta == 0:
     vorlage_delta = 0.001
 
-# Skalierungsfaktor: echtes Delta auf erwartetes Delta mappen
-skala = delta_erwartet / vorlage_delta if vorlage_delta != 0 else 1.0
-skala = np.clip(skala, -0.5, 0.5)
+# Vorlage-Deltas direkt übernehmen, auf delta_erwartet normalisieren
+vorlage_diffs = []
+for i in range(1, n_bins):
+    vorlage_diffs.append(
+        float(df_vorlage["preis"].iloc[i]) - float(df_vorlage["preis"].iloc[i - 1])
+    )
+
+vorlage_drift      = sum(vorlage_diffs)
+korrektur_pro_bin  = (delta_erwartet - vorlage_drift) / len(vorlage_diffs)
 
 prognose_ts     = [letzter_ts]
 prognose_preise = [letzter_preis]
 
-for i in range(1, n_bins):
-    vorlage_diff = float(df_vorlage["preis"].iloc[i]) - float(df_vorlage["preis"].iloc[i - 1])
-    prognose_preise.append(prognose_preise[-1] + vorlage_diff * skala)
-    prognose_ts.append(letzter_ts + pd.Timedelta(hours=i * 3))
+for i, diff in enumerate(vorlage_diffs):
+    prognose_preise.append(prognose_preise[-1] + diff + korrektur_pro_bin)
+    prognose_ts.append(letzter_ts + pd.Timedelta(hours=(i + 1) * 3))
 
 # =========================================
 # Header
@@ -193,7 +198,7 @@ fig.add_trace(go.Scatter(
     y=prognose_preise,
     mode="lines",
     name="Prognose 24h",
-    line=dict(color="#ff7f0e", width=2, dash="dash", shape="hv"),
+    line=dict(color="#ff7f0e", width=2, shape="hv"),
 ))
 
 # Übergangspunkt
