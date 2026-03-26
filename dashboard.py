@@ -166,13 +166,12 @@ if not df_live_raw.empty and "tendenz_24h" in df_live_raw.columns:
         eval_diff   = letzter_preis - (preis_t24 + tendenz_t24)
         eval_text   = f"Eval: {eval_diff:+.3f} €"
 
-st.caption(f"DEBUG — Live-Log Einträge: {len(df_live)}, letzter: {df_live['stunde'].max() if not df_live.empty else 'leer'}")
 
 # =========================================
 # Header
 # =========================================
 st.title("⛽ Diesel-Preisprognose")
-st.caption(f"ARAL Dürener Str. 407, Köln · Stand: {uhrzeit} Uhr")
+st.caption(f"ARAL Dürener Str. 407, Köln")
 
 st.divider()
 
@@ -199,11 +198,10 @@ with col3:
     tendenz_pfeil = "↑" if prognose["richtung_24h"] == "steigt" else "↓"
     st.metric(
         label="Tendenz nächste 24h",
-        value=f"{tendenz_pfeil} {delta_erwartet:+.3f} €",
-        help=f"Konfidenz: {prognose['konfidenz']:.1f}%"
+        value=f"{tendenz_pfeil}",
+        
     )
-    if eval_text:
-        st.caption(eval_text)
+
 
 st.divider()
 
