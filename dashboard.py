@@ -7,7 +7,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 import requests
-import pytz
 
 # =========================================
 # Konfiguration
@@ -37,56 +36,68 @@ def lade_preisverlauf():
     df = df[df["diesel"].notna()].copy()
     df["date"]   = pd.to_datetime(df["date"])
     df           = df.sort_values("date")
-    df["stunde"] = df["date"].dt.floor("h")
-    df = df.groupby("stunde").agg(preis=("diesel", "mean")).reset_index()
+    df["bin3h"]  = df["date"].dt.floor("3h")
+    df = df.groupby("bin3h").agg(preis=("diesel", "mean")).reset_index()
+    df = df.rename(columns={"bin3h": "stunde"})
     return df
 
 prognose = lade_prognose()
 df_ext   = lade_preisverlauf()
 
-# Aktuellen Preis aus JSON an den Verlauf anhängen
-aktueller_ts    = pd.Timestamp(prognose["timestamp"])
+# Aktuellen Preis aus JSON anhängen
+aktueller_ts    = pd.Timestamp(prognose["timestamp"]).floor("3h")
 aktueller_preis = prognose["preis_aktuell"]
 
-if aktueller_ts > df_ext["stunde"].max():
+if aktueller_ts >= df_ext["stunde"].max():
     neue_zeile = pd.DataFrame({"stunde": [aktueller_ts], "preis": [aktueller_preis]})
-    df_ext     = pd.concat([df_ext, neue_zeile]).sort_values("stunde").reset_index(drop=True)
+    df_ext     = pd.concat([df_ext, neue_zeile]).drop_duplicates("stunde").sort_values("stunde").reset_index(drop=True)
 
 # =========================================
-# Prognose berechnen
+# Prognose: zufälliger Vorlagetag (tagesbasierter Seed)
 # =========================================
 letzter_ts    = df_ext["stunde"].max()
 letzter_preis = float(df_ext["preis"].iloc[-1])
 
-# Typische stündliche Volatilität aus letzten 4 Wochen
+# Vorlagetage: letzte 4 Wochen, mind. 6 Bins (= 18h)
 cutoff_4w  = letzter_ts - pd.Timedelta(weeks=4)
-df_4w      = df_ext[df_ext["stunde"] >= cutoff_4w].copy()
-df_4w      = df_4w.sort_values("stunde").reset_index(drop=True)
-df_4w["stunde_des_tages"] = df_4w["stunde"].dt.hour
-df_4w["diff"]             = df_4w["preis"].diff()
-std_pro_stunde            = df_4w.groupby("stunde_des_tages")["diff"].std()
+df_4w      = df_ext[(df_ext["stunde"] >= cutoff_4w) & (df_ext["stunde"] < letzter_ts)].copy()
+df_4w["datum"] = df_4w["stunde"].dt.date
+vollstaendige_tage = (
+    df_4w.groupby("datum")
+    .filter(lambda x: len(x) >= 6)["datum"]
+    .unique()
+)
 
-# Erwartetes Gesamtdelta aus Modellprognose
+# Tagesbasierter Seed — stabil über den Tag, wechselt täglich
+seed       = int(pd.Timestamp.now().strftime("%Y%m%d"))
+rng        = np.random.default_rng(seed)
+vorlagetag = rng.choice(vollstaendige_tage)
+
+df_vorlage = df_4w[df_4w["datum"] == vorlagetag].sort_values("stunde").reset_index(drop=True)
+
+# Vorlagemuster auf aktuellen Preis + erwartetes Delta kalibrieren
 delta_erwartet = float(prognose["delta_erwartet"])
 if prognose["richtung_24h"] == "fällt":
     delta_erwartet = -abs(delta_erwartet)
 else:
     delta_erwartet = abs(delta_erwartet)
 
-# Linearer Trend + tagesbasiertes Rauschen
-trend = np.linspace(0, delta_erwartet, 25)
-seed  = int(pd.Timestamp.now().strftime("%Y%m%d"))
-rng   = np.random.default_rng(seed)
+n_bins         = min(8, len(df_vorlage))   # max 8 Bins = 24h
+vorlage_start  = float(df_vorlage["preis"].iloc[0])
+vorlage_ende   = float(df_vorlage["preis"].iloc[n_bins - 1])
+vorlage_delta  = vorlage_ende - vorlage_start if vorlage_delta_raw := (vorlage_ende - vorlage_start) != 0 else 0.001
+
+# Skalierungsfaktor: echtes Delta auf erwartetes Delta mappen
+skala = delta_erwartet / vorlage_delta if vorlage_delta != 0 else 1.0
+skala = np.clip(skala, -3.0, 3.0)  # extremen Skalierungen begrenzen
 
 prognose_ts     = [letzter_ts]
 prognose_preise = [letzter_preis]
 
-for i in range(1, 25):
-    stunde_h = (letzter_ts + pd.Timedelta(hours=i)).hour
-    std      = float(std_pro_stunde.get(stunde_h, df_4w["diff"].std()))
-    rauschen = rng.normal(0, std * 0.5)
-    prognose_ts.append(letzter_ts + pd.Timedelta(hours=i))
-    prognose_preise.append(letzter_preis + trend[i] + rauschen)
+for i in range(1, n_bins):
+    vorlage_diff = float(df_vorlage["preis"].iloc[i]) - float(df_vorlage["preis"].iloc[i - 1])
+    prognose_preise.append(prognose_preise[-1] + vorlage_diff * skala)
+    prognose_ts.append(letzter_ts + pd.Timedelta(hours=i * 3))
 
 # =========================================
 # Header
@@ -186,9 +197,8 @@ fig.add_trace(go.Scatter(
     x=[letzter_ts],
     y=[letzter_preis],
     mode="markers",
-    name="Aktuell",
+    showlegend=False,
     marker=dict(color="red", size=8, symbol="circle"),
-    showlegend=False
 ))
 
 # 24h-Mittel
