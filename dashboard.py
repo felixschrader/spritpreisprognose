@@ -303,7 +303,7 @@ while tag <= jetzt_ts:
 fig.update_layout(
     shapes=mitternacht_linien,
     xaxis=dict(
-        dtick=3 * 3600 * 1000,
+        dtick=12 * 3600 * 1000,
         tickformat="%d.%m\n%H:%M",
         tickangle=0,
     ),
