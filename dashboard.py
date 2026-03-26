@@ -15,7 +15,7 @@ import pytz
 st.set_page_config(
     page_title="Dieselpreis · Köln",
     page_icon="⛽",
-    layout="wide"
+    layout="centered"
 )
 
 STATION_UUID = "e1aefc4e-3ca1-4018-8d91-455b69d35d41"
@@ -37,7 +37,7 @@ html, body, [class*="css"], .stApp {
     font-family: 'Roboto', sans-serif;
     background-color: #F0F2F5 !important;
     color: #212529;
-    font-size: 16px;
+    font-size: 18px;
 }
 
 #MainMenu, footer, header { visibility: hidden; }
@@ -45,7 +45,8 @@ html, body, [class*="css"], .stApp {
 
 .block-container {
     padding: 0 !important;
-    max-width: 100% !important;
+    max-width: 860px !important;
+    margin: 0 auto !important;
 }
 
 /* ── TOPBAR ── */
