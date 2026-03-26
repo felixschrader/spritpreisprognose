@@ -274,14 +274,14 @@ def lade_aktueller_preis():
         return None
 
 @st.cache_data(ttl=3600)
-def generiere_empfehlung(preis, mean_24h, richtung, delta, empfehlung, begruendung, signal_rausch):
+def generiere_empfehlung(preis, mean_24h, richtung, delta, empfehlung, signal_rausch):
     prompt = f"""Du bist ein hilfreicher Tankstellen-Assistent für normale Autofahrer. Schreibe 2-3 Sätze auf Deutsch.
 
 Fakten:
 - Aktueller Dieselpreis: {preis:.3f} € ({preis - mean_24h:+.3f} € vs. 24h-Schnitt)
 - Preistrend nächste 24h: {richtung} um ca. {abs(delta):.3f} €
 - Verhältnis erwartete Änderung zu typischen Schwankungen: {signal_rausch:.2f} (unter 0.5 = Änderung geht im Rauschen unter, über 1.0 = klares Signal)
-- Empfehlung: {empfehlung}
+- Empfehlung: {empfehlung} — diese Empfehlung ist korrekt und soll klar und überzeugend begründet werden
 
 Regeln:
 - Erster Satz fett mit **: klare Handlungsempfehlung
@@ -391,11 +391,11 @@ try:
     ki_text = generiere_empfehlung(
         letzter_preis, mean_24h,
         prognose["richtung_24h"], delta_erwartet,
-        prognose["empfehlung"], prognose["begruendung"],
+        prognose["empfehlung"],
         signal_rausch
     )
 except:
-    ki_text = f"**{prognose['empfehlung'].capitalize()}.** {prognose['begruendung']}"
+    ki_text = f"**{prognose['empfehlung'].capitalize()}"
 
 # =========================================
 # Hilfsfunktionen
