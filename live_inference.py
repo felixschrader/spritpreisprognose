@@ -198,12 +198,13 @@ preis_geaendert = (letzter_log_preis is None) or (abs(preis_aktuell - letzter_lo
 if preis_geaendert:
     datei_existiert = os.path.exists(LOG_PATH)
     with open(LOG_PATH, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["timestamp", "preis"])
+        writer = csv.DictWriter(f, fieldnames=["timestamp", "preis", "tendenz_24h"])
         if not datei_existiert:
             writer.writeheader()
         writer.writerow({
-            "timestamp": JETZT.strftime("%Y-%m-%d %H:%M"),
-            "preis":     round(preis_aktuell, 3)
+            "timestamp":   JETZT.strftime("%Y-%m-%d %H:%M"),
+            "preis":       round(preis_aktuell, 3),
+            "tendenz_24h": round(delta_erwartet, 4),  # bereits vorzeichenbehaftet
         })
     print(f"Live-Log aktualisiert: {preis_aktuell:.3f} € ({JETZT.strftime('%H:%M')})")
 else:
