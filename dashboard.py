@@ -85,7 +85,9 @@ else:
 n_bins         = min(8, len(df_vorlage))   # max 8 Bins = 24h
 vorlage_start  = float(df_vorlage["preis"].iloc[0])
 vorlage_ende   = float(df_vorlage["preis"].iloc[n_bins - 1])
-vorlage_delta  = vorlage_ende - vorlage_start if vorlage_delta_raw := (vorlage_ende - vorlage_start) != 0 else 0.001
+vorlage_delta = vorlage_ende - vorlage_start
+if vorlage_delta == 0:
+    vorlage_delta = 0.001
 
 # Skalierungsfaktor: echtes Delta auf erwartetes Delta mappen
 skala = delta_erwartet / vorlage_delta if vorlage_delta != 0 else 1.0
