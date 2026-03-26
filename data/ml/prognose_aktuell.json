@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-03-27 00:13",
+  "timestamp": "2026-03-27 00:24",
   "station_uuid": "e1aefc4e-3ca1-4018-8d91-455b69d35d41",
   "station": "ARAL Dürener Str. 407",
   "preis_aktuell": 2.189,
-  "nachbar_mean": 2.194,
+  "nachbar_mean": 2.19,
   "dip_oder_peak": "Dip",
-  "delta_zu_nachbarn": -0.0045,
+  "delta_zu_nachbarn": -0.0012,
   "richtung_6h": "steigt",
   "richtung_12h": "steigt",
   "empfehlung": "heute tanken",
@@ -13,122 +13,122 @@
   "prognose_stufen": [
     {
       "stunde_offset": 1,
-      "zeitpunkt": "2026-03-27 01:13",
+      "zeitpunkt": "2026-03-27 01:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 2,
-      "zeitpunkt": "2026-03-27 02:13",
+      "zeitpunkt": "2026-03-27 02:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 3,
-      "zeitpunkt": "2026-03-27 03:13",
+      "zeitpunkt": "2026-03-27 03:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 4,
-      "zeitpunkt": "2026-03-27 04:13",
+      "zeitpunkt": "2026-03-27 04:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 5,
-      "zeitpunkt": "2026-03-27 05:13",
+      "zeitpunkt": "2026-03-27 05:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 6,
-      "zeitpunkt": "2026-03-27 06:13",
+      "zeitpunkt": "2026-03-27 06:24",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 7,
-      "zeitpunkt": "2026-03-27 07:13",
+      "zeitpunkt": "2026-03-27 07:24",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 8,
-      "zeitpunkt": "2026-03-27 08:13",
+      "zeitpunkt": "2026-03-27 08:24",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 9,
-      "zeitpunkt": "2026-03-27 09:13",
+      "zeitpunkt": "2026-03-27 09:24",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 10,
-      "zeitpunkt": "2026-03-27 10:13",
+      "zeitpunkt": "2026-03-27 10:24",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 11,
-      "zeitpunkt": "2026-03-27 11:13",
+      "zeitpunkt": "2026-03-27 11:24",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 12,
-      "zeitpunkt": "2026-03-27 12:13",
+      "zeitpunkt": "2026-03-27 12:24",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 13,
-      "zeitpunkt": "2026-03-27 13:13",
+      "zeitpunkt": "2026-03-27 13:24",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 14,
-      "zeitpunkt": "2026-03-27 14:13",
+      "zeitpunkt": "2026-03-27 14:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 15,
-      "zeitpunkt": "2026-03-27 15:13",
+      "zeitpunkt": "2026-03-27 15:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 16,
-      "zeitpunkt": "2026-03-27 16:13",
+      "zeitpunkt": "2026-03-27 16:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 17,
-      "zeitpunkt": "2026-03-27 17:13",
+      "zeitpunkt": "2026-03-27 17:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 18,
-      "zeitpunkt": "2026-03-27 18:13",
+      "zeitpunkt": "2026-03-27 18:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 19,
-      "zeitpunkt": "2026-03-27 19:13",
+      "zeitpunkt": "2026-03-27 19:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 20,
-      "zeitpunkt": "2026-03-27 20:13",
+      "zeitpunkt": "2026-03-27 20:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 21,
-      "zeitpunkt": "2026-03-27 21:13",
+      "zeitpunkt": "2026-03-27 21:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 22,
-      "zeitpunkt": "2026-03-27 22:13",
+      "zeitpunkt": "2026-03-27 22:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 23,
-      "zeitpunkt": "2026-03-27 23:13",
+      "zeitpunkt": "2026-03-27 23:24",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 24,
-      "zeitpunkt": "2026-03-28 00:13",
+      "zeitpunkt": "2026-03-28 00:24",
       "richtung": "fällt"
     }
   ],
