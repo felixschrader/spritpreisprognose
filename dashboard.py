@@ -512,14 +512,6 @@ fig.add_trace(go.Scatter(
     ),
 ))
 
-fig.add_hline(
-    y=mean_24h,
-    line_dash="dot",
-    line_color="#BDBDBD",
-    annotation_text=f"&Oslash; {mean_24h:.3f} &euro;",
-    annotation_position="bottom right",
-    annotation_font=dict(size=13, color="#9E9E9E"),
-)
 
 mitternacht_linien = []
 tag = cutoff_7d.normalize()
