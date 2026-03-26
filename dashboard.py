@@ -82,7 +82,7 @@ html, body, [class*="css"], .stApp {
     white-space: nowrap;
 }
 
-/* ── METRIC CARDS — gleiche Höhe via CSS Grid ── */
+/* ── METRIC CARDS ── */
 .metric-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -251,7 +251,7 @@ def lade_live_log():
         df = pd.read_csv(LOG_URL, parse_dates=["timestamp"], on_bad_lines="skip")
         return df
     except:
-        return pd.DataFrame(columns=["timestamp", "preis", "tendenz_24h"])
+        return pd.DataFrame(columns=["timestamp", "preis", "richtung_6h", "richtung_12h"])
 
 @st.cache_data(ttl=60)
 def lade_aktueller_preis():
@@ -265,21 +265,21 @@ def lade_aktueller_preis():
         return None
 
 @st.cache_data(ttl=3600)
-def generiere_empfehlung(preis, mean_24h, richtung, delta, empfehlung, signal_rausch):
+def generiere_empfehlung(preis, mean_24h, richtung_6h, richtung_12h, dip_peak, empfehlung):
     prompt = f"""Du bist ein hilfreicher Tankstellen-Assistent für normale Autofahrer. Schreibe 2-3 Sätze auf Deutsch.
 
 Fakten:
 - Aktueller Dieselpreis: {preis:.3f} € ({preis - mean_24h:+.3f} € vs. 24h-Schnitt)
-- Preistrend nächste 24h: {richtung} um ca. {abs(delta):.3f} €
-- Verhältnis erwartete Änderung zu typischen Schwankungen: {signal_rausch:.2f} (unter 0.5 = Änderung geht im Rauschen unter, über 1.0 = klares Signal)
+- Aktuelle Lage: {dip_peak} (Dip = günstiger als Nachbarn, Peak = teurer)
+- Preistrend in 6 Stunden: {richtung_6h}
+- Preistrend in 12 Stunden: {richtung_12h}
 - Empfehlung: {empfehlung}
 
 Regeln:
 - Die Empfehlung "{empfehlung}" ist KORREKT — begründe sie überzeugend, stelle sie NICHT in Frage
 - Erster Satz fett mit **: klare Handlungsempfehlung die mit "{empfehlung}" übereinstimmt
-- Wenn Signal-Rausch unter 0.5: erwartete Preisänderung ist klein, könnte durch normale Schwankungen aufgehoben werden
-- Wenn Signal-Rausch über 1.0: klares Signal, selbstbewusst formulieren
-- Kein Fachjargon, keine Zeitangaben über 24h, vorsichtig aber konsistent formulieren"""
+- Keine konkreten Eurobeträge für erwartete Preisänderungen nennen
+- Kein Fachjargon, vorsichtig aber konsistent formulieren"""
 
     r = requests.post(
         "https://api.anthropic.com/v1/messages",
@@ -328,14 +328,26 @@ jetzt_ts      = pd.Timestamp(datetime.now(BERLIN)).tz_localize(None)
 letzter_preis = preis_live if preis_live else float(prognose["preis_aktuell"])
 uhrzeit       = jetzt_ts.strftime("%H:%M")
 
-delta_erwartet = float(prognose["delta_erwartet"])
-if prognose["richtung_24h"] == "fällt":
-    delta_erwartet = -abs(delta_erwartet)
-else:
-    delta_erwartet = abs(delta_erwartet)
+# Prognose-Stufenlinie aus prognose_stufen aufbauen
+prognose_stufen = prognose.get("prognose_stufen", [])
+df_prognose_linie = pd.DataFrame()
+if prognose_stufen:
+    # Preis schrittweise aufbauen — jede Stunde steigt oder fällt um einen kleinen Betrag
+    # Da wir nur Richtung kennen, nutzen wir die delta_zu_nachbarn als Schrittgröße
+    delta_zu_nachbarn = abs(float(prognose.get("delta_zu_nachbarn", 0.005)))
+    schritt = max(delta_zu_nachbarn / 24, 0.001)  # kleiner Schritt pro Stunde
 
-prognose_preis = letzter_preis + delta_erwartet
-prognose_ende  = jetzt_ts + pd.Timedelta(hours=24)
+    punkte = [{"stunde": jetzt_ts, "preis": letzter_preis}]
+    preis_sim = letzter_preis
+    for s in prognose_stufen:
+        ts = pd.Timestamp(s["zeitpunkt"])
+        if s["richtung"] == "steigt":
+            preis_sim = preis_sim + schritt
+        else:
+            preis_sim = preis_sim - schritt
+        punkte.append({"stunde": ts, "preis": round(preis_sim, 4)})
+
+    df_prognose_linie = pd.DataFrame(punkte)
 
 cutoff_7d = jetzt_ts - pd.Timedelta(days=7)
 df_plot   = df_ext[df_ext["stunde"] >= cutoff_7d].copy()
@@ -364,26 +376,16 @@ if not df_24h.empty:
 
 mean_24h = float(df_hist[df_hist["stunde"] >= (jetzt_ts - pd.Timedelta(hours=24))]["preis"].mean())
 
-eval_text = None
-if not df_live_raw.empty and "tendenz_24h" in df_live_raw.columns:
-    df_live_raw["timestamp"] = pd.to_datetime(df_live_raw["timestamp"])
-    ziel_ts  = jetzt_ts - pd.Timedelta(hours=24)
-    toleranz = pd.Timedelta(minutes=30)
-    df_t24   = df_live_raw[
-        (df_live_raw["timestamp"] >= ziel_ts - toleranz) &
-        (df_live_raw["timestamp"] <= ziel_ts + toleranz)
-    ]
-    if not df_t24.empty and not pd.isna(df_t24.iloc[-1].get("tendenz_24h", float("nan"))):
-        eval_diff = letzter_preis - (float(df_t24.iloc[-1]["preis"]) + float(df_t24.iloc[-1]["tendenz_24h"]))
-        eval_text = f"{eval_diff:+.3f} €"
-
-signal_rausch = abs(delta_erwartet) / float(prognose["volatilitaet_7d"]) if float(prognose["volatilitaet_7d"]) > 0 else 0
+# KI-Empfehlung
+richtung_6h  = prognose.get("richtung_6h", "unbekannt")
+richtung_12h = prognose.get("richtung_12h", "unbekannt")
+dip_peak     = prognose.get("dip_oder_peak", "")
 
 try:
     ki_text = generiere_empfehlung(
         letzter_preis, mean_24h,
-        prognose["richtung_24h"], delta_erwartet,
-        prognose["empfehlung"], signal_rausch
+        richtung_6h, richtung_12h,
+        dip_peak, prognose["empfehlung"]
     )
 except:
     ki_text = f"**{prognose['empfehlung'].capitalize()}.** {prognose['begruendung']}"
@@ -412,18 +414,17 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # =========================================
-# METRIKEN — CSS Grid für gleiche Höhe
+# METRIKEN
 # =========================================
 delta_val   = letzter_preis - mean_24h
 delta_class = "delta-green" if delta_val < 0 else "delta-red"
 delta_arrow = "↓" if delta_val < 0 else "↑"
 delta_label = "günstiger" if delta_val < 0 else "teurer"
 
-tendenz_pfeil = "↓" if prognose["richtung_24h"] == "fällt" else "↑"
-tendenz_class = "tendenz-down" if prognose["richtung_24h"] == "fällt" else "tendenz-up"
-tendenz_aria  = "Preis fällt" if prognose["richtung_24h"] == "fällt" else "Preis steigt"
-
-eval_row = f'<div class="card-delta delta-blue" aria-label="Evaluierung: {eval_text}">Eval: {eval_text}</div>' if eval_text else ""
+# Tendenz aus richtung_6h
+tendenz_pfeil = "↓" if richtung_6h == "fällt" else "↑"
+tendenz_class = "tendenz-down" if richtung_6h == "fällt" else "tendenz-up"
+tendenz_aria  = "Preis fällt in 6h" if richtung_6h == "fällt" else "Preis steigt in 6h"
 
 st.markdown(f"""
 <div class="metric-grid" role="region" aria-label="Preiskennzahlen">
@@ -439,8 +440,9 @@ st.markdown(f"""
         </div>
     </div>
     <div class="card">
-        <div class="card-title">Tendenz nächste 24h</div>
+        <div class="card-title">Tendenz nächste 6h</div>
         <div class="tendenz-val {tendenz_class}" aria-label="{tendenz_aria}">{tendenz_pfeil}</div>
+        <div class="card-delta delta-blue">12h: {richtung_12h}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -450,8 +452,8 @@ st.markdown(f"""
 # =========================================
 if "heute" in prognose["empfehlung"]:
     card_cls, badge_cls, badge_txt = "heute", "badge-heute", "Jetzt tanken"
-elif "morgen" in prognose["empfehlung"]:
-    card_cls, badge_cls, badge_txt = "morgen", "badge-morgen", "Morgen tanken"
+elif "morgen" in prognose["empfehlung"] or "später" in prognose["empfehlung"]:
+    card_cls, badge_cls, badge_txt = "morgen", "badge-morgen", "Später tanken"
 else:
     card_cls, badge_cls, badge_txt = "warten", "badge-warten", "Abwarten"
 
@@ -462,7 +464,7 @@ st.markdown(f"""
     <div class="ki-footer">
         KI-generierter Text &middot;
         <a href="https://www.anthropic.com" target="_blank" rel="noopener">Claude API &middot; Anthropic</a>
-        &middot; Modell: XGBoost &middot; Acc: {prognose['modell_accuracy']:.1f}% &middot; Keine Garantie
+        &middot; Modell: Random Forest MultiOutput &middot; Acc: {prognose['modell_accuracy']:.1f}% &middot; Keine Garantie
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -474,6 +476,7 @@ st.markdown('<div class="section-label" role="heading" aria-level="2">Preisverla
 
 fig = go.Figure()
 
+# Historischer Preisverlauf
 fig.add_trace(go.Scatter(
     x=df_hist["stunde"],
     y=df_hist["preis"],
@@ -482,6 +485,7 @@ fig.add_trace(go.Scatter(
     line=dict(color="#BDBDBD", width=1.5, shape="hv"),
 ))
 
+# 24h-Mittel-Bins
 fig.add_trace(go.Scatter(
     x=df_24h["stunde"],
     y=df_24h["preis"],
@@ -490,14 +494,17 @@ fig.add_trace(go.Scatter(
     line=dict(color="#1565C0", width=2.5, shape="hv"),
 ))
 
-fig.add_trace(go.Scatter(
-    x=[jetzt_ts, prognose_ende],
-    y=[prognose_preis, prognose_preis],
-    mode="lines",
-    name="Prognose 24h",
-    line=dict(color="#E65100", width=2.5, shape="hv"),
-))
+# Prognose-Stufenlinie — 24 Stunden
+if not df_prognose_linie.empty:
+    fig.add_trace(go.Scatter(
+        x=df_prognose_linie["stunde"],
+        y=df_prognose_linie["preis"],
+        mode="lines",
+        name="Prognose 24h",
+        line=dict(color="#E65100", width=2.5, shape="hv", dash="dot"),
+    ))
 
+# Aktueller Preis Marker
 fig.add_trace(go.Scatter(
     x=[jetzt_ts],
     y=[letzter_preis],
@@ -511,10 +518,17 @@ fig.add_trace(go.Scatter(
     ),
 ))
 
+# Trennlinie jetzt
+fig.add_vline(
+    x=jetzt_ts,
+    line_width=1,
+    line_dash="dash",
+    line_color="#BDBDBD",
+)
 
 mitternacht_linien = []
 tag = cutoff_7d.normalize()
-while tag <= jetzt_ts:
+while tag <= jetzt_ts + pd.Timedelta(days=1):
     mitternacht_linien.append(dict(
         type="line",
         x0=tag, x1=tag, y0=0, y1=1,
