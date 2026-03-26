@@ -261,7 +261,7 @@ ki_text = generiere_empfehlung(
 
 
 st.markdown(f"""
-<div style='background-color: {"#d4edda" if "heute" in empfehlung else "#fff3cd" if "morgen" in empfehlung else "#f8d7da"};
+<div style='background-color: {"#d4edda" if "heute" in prognose["empfehlung"] else "#fff3cd" if "morgen" in prognose["empfehlung"] else "#f8d7da"};
             padding: 16px 20px; border-radius: 10px; margin-bottom: 20px;'>
     <p style='margin:0; font-size: 1.05em; color: #333;'>{ki_text}</p>
 </div>
