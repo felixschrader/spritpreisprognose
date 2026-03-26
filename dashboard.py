@@ -127,13 +127,18 @@ vorlage_norm = [(v - v_min) / v_range for v in vorlage_werte]
 if prognose["richtung_24h"] == "fällt":
     vorlage_norm = [1.0 - v for v in vorlage_norm]
 
-# Muster auf [letzter_preis → letzter_preis + delta_erwartet] skalieren
+# Amplitude aus historischer Volatilität, Endpunkt aus delta_erwartet
+amplitude = float(prognose["volatilitaet_7d"])
+
 prognose_ts     = [letzter_ts]
 prognose_preise = [letzter_preis]
 
 for i in range(1, n_bins):
     t = vorlage_norm[i]
-    skalierter_preis = letzter_preis + t * delta_erwartet
+    # Kurvenform skaliert auf Volatilität, Drift linear Richtung Ziel
+    drift_anteil     = (i / (n_bins - 1)) * delta_erwartet
+    form_anteil      = (t - vorlage_norm[i - 1] if i > 0 else 0)
+    skalierter_preis = letzter_preis + drift_anteil + (t - 0.5) * amplitude
     prognose_preise.append(skalierter_preis)
     prognose_ts.append(letzter_ts + pd.Timedelta(hours=i * 3))
 
