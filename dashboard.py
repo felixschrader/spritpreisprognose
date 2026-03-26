@@ -124,9 +124,13 @@ for i in range(len(bin_grenzen) - 1):
 
 # Letzter Bin endet bei letzter_ts — kein Sprung zum aktuellen Live-Preis
 df_24h = pd.DataFrame(df_24h_rows).sort_values("stunde").reset_index(drop=True)
+# Letzten Bin-Wert auf letzter_preis setzen damit Linie horizontal auf Höhe des roten Punkts endet
+if not df_24h.empty:
+    df_24h.iloc[-1, df_24h.columns.get_loc("preis")] = letzter_preis
 
 # Mittel der letzten 24h
 mean_24h = float(df_plot[df_plot["stunde"] >= (letzter_ts - pd.Timedelta(hours=24))]["preis"].mean())
+st.caption(f"DEBUG — Bins im letzten 24h-Fenster: {df_plot[df_plot['stunde'] >= (letzter_ts - pd.Timedelta(hours=24))].shape[0]}, mean_24h: {mean_24h:.3f}")
 
 # Historische Linie: glatt, endet am roten Punkt (letzter_ts, letzter_preis)
 df_hist = df_plot.copy()
@@ -229,7 +233,7 @@ fig.add_trace(go.Scatter(
     y=df_hist["preis"],
     mode="lines",
     name="Preisverlauf",
-    line=dict(color="#aaaaaa", width=1.5, shape="linear"),
+    line=dict(color="#aaaaaa", width=1.5, shape="hv"),
 ))
 
 # 24h-Mittel — blau, Stufenlinie, endet bei letzter_ts ohne Sprung
