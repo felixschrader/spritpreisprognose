@@ -44,74 +44,76 @@ html, body, [class*="css"], .stApp {
 .stDeployButton { display: none; }
 
 .block-container {
-    padding: 0 !important;
+    padding: 0 0 3rem 0 !important;
     max-width: 860px !important;
-    margin: 0 auto !important;
 }
 
 /* ── TOPBAR ── */
 .topbar {
     background: #1565C0;
     padding: 0 2rem;
-    height: 60px;
+    height: 68px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-    position: sticky;
-    top: 0;
-    z-index: 100;
+    margin-bottom: 2rem;
 }
+.topbar-left { display: flex; flex-direction: column; gap: 2px; }
 .topbar-title {
-    font-size: 1.2rem;
+    font-size: 1.45rem;
     font-weight: 500;
     color: #FFFFFF;
     letter-spacing: 0.01em;
+    line-height: 1.2;
 }
 .topbar-sub {
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     color: rgba(255,255,255,0.85);
-    margin-left: 1rem;
 }
 .topbar-time {
     font-family: 'Roboto Mono', monospace;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     color: #FFFFFF;
     background: rgba(0,0,0,0.18);
-    padding: 5px 14px;
+    padding: 6px 14px;
     border-radius: 4px;
     letter-spacing: 0.04em;
+    white-space: nowrap;
 }
 
-/* ── WRAPPER ── */
-.main-content {
-    padding: 1.75rem 2rem 4rem 2rem;
-    max-width: 960px;
-    margin: 0 auto;
+/* ── METRIC CARDS — gleiche Höhe via CSS Grid ── */
+.metric-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    align-items: stretch;
+    margin-bottom: 1.25rem;
 }
-
-/* ── CARDS ── */
 .card {
     background: #FFFFFF;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.06);
     padding: 1.5rem 1.75rem;
-    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
 }
 .card-title {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 500;
-    letter-spacing: 0.07em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #616161;
     margin-bottom: 0.6rem;
 }
 .card-value {
-    font-size: clamp(2.2rem, 3.5vw, 3rem);
+    font-size: clamp(2.2rem, 3.2vw, 2.8rem);
     font-weight: 300;
     color: #1A1A1A;
     line-height: 1.1;
     letter-spacing: -0.01em;
+    margin-bottom: auto;
 }
 .card-value sup {
     font-size: 0.42em;
@@ -120,16 +122,16 @@ html, body, [class*="css"], .stApp {
     color: #757575;
 }
 .card-delta {
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     font-weight: 500;
-    margin-top: 0.5rem;
+    margin-top: 0.6rem;
 }
 .delta-green { color: #2E7D32; }
 .delta-red   { color: #C62828; }
 .delta-blue  { color: #1565C0; }
 
 .tendenz-val {
-    font-size: clamp(2.8rem, 5vw, 3.8rem);
+    font-size: clamp(2.8rem, 5vw, 3.6rem);
     font-weight: 300;
     line-height: 1;
 }
@@ -141,7 +143,7 @@ html, body, [class*="css"], .stApp {
     background: #FFFFFF;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.06);
-    padding: 1.5rem 1.75rem 1.1rem 1.75rem;
+    padding: 1.6rem 1.75rem 1.2rem 1.75rem;
     border-left: 5px solid #1565C0;
     margin-bottom: 1.5rem;
 }
@@ -151,43 +153,40 @@ html, body, [class*="css"], .stApp {
 
 .empfehlung-badge {
     display: inline-block;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     padding: 3px 10px;
     border-radius: 4px;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.8rem;
 }
 .badge-heute  { background: #E8F5E9; color: #1B5E20; }
 .badge-morgen { background: #FFF3E0; color: #BF360C; }
 .badge-warten { background: #FFEBEE; color: #B71C1C; }
 
 .empfehlung-text {
-    font-size: 1.02rem;
+    font-size: 1.1rem;
     color: #212121;
-    line-height: 1.75;
+    line-height: 1.8;
 }
 .empfehlung-text strong {
     color: #1A1A1A;
     font-weight: 500;
 }
 .ki-footer {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     color: #9E9E9E;
     margin-top: 1rem;
     padding-top: 0.75rem;
     border-top: 1px solid #F5F5F5;
 }
-.ki-footer a {
-    color: #757575;
-    text-decoration: none;
-}
+.ki-footer a { color: #757575; text-decoration: none; }
 .ki-footer a:hover { text-decoration: underline; }
 
 /* ── SECTION LABEL ── */
 .section-label {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     font-weight: 500;
     letter-spacing: 0.07em;
     text-transform: uppercase;
@@ -202,14 +201,11 @@ html, body, [class*="css"], .stApp {
     margin-top: 2.5rem;
     padding-top: 1rem;
     border-top: 1px solid #E0E0E0;
-    font-size: 0.75rem;
+    font-size: 0.82rem;
     color: #9E9E9E;
-    line-height: 1.9;
+    line-height: 2;
 }
-.page-footer a {
-    color: #757575;
-    text-decoration: none;
-}
+.page-footer a { color: #757575; text-decoration: none; }
 .page-footer a:hover { text-decoration: underline; }
 
 /* ── BARRIEREFREIHEIT ── */
@@ -218,20 +214,15 @@ html, body, [class*="css"], .stApp {
     outline-offset: 3px;
     border-radius: 3px;
 }
-a:focus-visible {
-    outline: 3px solid #1565C0;
-}
 
 /* ── RESPONSIVE ── */
-@media (max-width: 768px) {
-    .topbar { padding: 0 1rem; height: 52px; }
+@media (max-width: 640px) {
+    .metric-grid { grid-template-columns: 1fr; }
+    .topbar { padding: 0 1rem; height: auto; min-height: 56px; flex-wrap: wrap; gap: 0.5rem; padding: 0.75rem 1rem; }
     .topbar-sub { display: none; }
-    .main-content { padding: 1rem 1rem 3rem 1rem; }
-    .card { padding: 1.1rem 1.25rem; }
     .card-value { font-size: 2rem; }
     .tendenz-val { font-size: 2.4rem; }
-    .empfehlung-card { padding: 1.1rem 1.25rem 0.9rem 1.25rem; }
-    .empfehlung-text { font-size: 0.95rem; }
+    .empfehlung-text { font-size: 1rem; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -281,13 +272,14 @@ Fakten:
 - Aktueller Dieselpreis: {preis:.3f} € ({preis - mean_24h:+.3f} € vs. 24h-Schnitt)
 - Preistrend nächste 24h: {richtung} um ca. {abs(delta):.3f} €
 - Verhältnis erwartete Änderung zu typischen Schwankungen: {signal_rausch:.2f} (unter 0.5 = Änderung geht im Rauschen unter, über 1.0 = klares Signal)
-- Empfehlung: {empfehlung} — diese Empfehlung ist korrekt und soll klar und überzeugend begründet werden
+- Empfehlung: {empfehlung}
 
 Regeln:
-- Erster Satz fett mit **: klare Handlungsempfehlung
-- Wenn Signal-Rausch unter 0.5: erwartete Änderung könnte durch normale Preisschwankungen aufgehoben werden
+- Die Empfehlung "{empfehlung}" ist KORREKT — begründe sie überzeugend, stelle sie NICHT in Frage
+- Erster Satz fett mit **: klare Handlungsempfehlung die mit "{empfehlung}" übereinstimmt
+- Wenn Signal-Rausch unter 0.5: erwartete Preisänderung ist klein, könnte durch normale Schwankungen aufgehoben werden
 - Wenn Signal-Rausch über 1.0: klares Signal, selbstbewusst formulieren
-- Kein Fachjargon, keine Zeitangaben über 24h, vorsichtig formulieren"""
+- Kein Fachjargon, keine Zeitangaben über 24h, vorsichtig aber konsistent formulieren"""
 
     r = requests.post(
         "https://api.anthropic.com/v1/messages",
@@ -391,11 +383,10 @@ try:
     ki_text = generiere_empfehlung(
         letzter_preis, mean_24h,
         prognose["richtung_24h"], delta_erwartet,
-        prognose["empfehlung"],
-        signal_rausch
+        prognose["empfehlung"], signal_rausch
     )
 except:
-    ki_text = f"**{prognose['empfehlung'].capitalize()}"
+    ki_text = f"**{prognose['empfehlung'].capitalize()}.** {prognose['begruendung']}"
 
 # =========================================
 # Hilfsfunktionen
@@ -412,20 +403,17 @@ def bold(text):
 # =========================================
 st.markdown(f"""
 <div class="topbar" role="banner">
-    <div style="display:flex; align-items:baseline; gap:0.5rem; flex-wrap:wrap;">
+    <div class="topbar-left">
         <span class="topbar-title">Dieselpreisprognose</span>
         <span class="topbar-sub">ARAL &middot; Dürener Str. 407 &middot; Köln</span>
     </div>
-    <span class="topbar-time" aria-label="Aktuelle Uhrzeit: {uhrzeit} Uhr">Live &middot; {uhrzeit} Uhr</span>
+    <span class="topbar-time" aria-label="Stand: {uhrzeit} Uhr">Live &middot; {uhrzeit} Uhr</span>
 </div>
 """, unsafe_allow_html=True)
 
 # =========================================
-# MAIN CONTENT
+# METRIKEN — CSS Grid für gleiche Höhe
 # =========================================
-st.markdown('<div class="main-content" role="main">', unsafe_allow_html=True)
-
-# ── Metriken ──
 delta_val   = letzter_preis - mean_24h
 delta_class = "delta-green" if delta_val < 0 else "delta-red"
 delta_arrow = "↓" if delta_val < 0 else "↑"
@@ -437,39 +425,30 @@ tendenz_aria  = "Preis fällt" if prognose["richtung_24h"] == "fällt" else "Pre
 
 eval_row = f'<div class="card-delta delta-blue" aria-label="Evaluierung: {eval_text}">Eval: {eval_text}</div>' if eval_text else ""
 
-col1, col2, col3 = st.columns(3, gap="medium")
-
-with col1:
-    st.markdown(f"""
-    <div class="card" role="region" aria-label="Durchschnittspreis letzte 24 Stunden">
+st.markdown(f"""
+<div class="metric-grid" role="region" aria-label="Preiskennzahlen">
+    <div class="card">
         <div class="card-title">Ø letzte 24 Stunden</div>
         <div class="card-value" aria-label="{mean_24h:.3f} Euro">{preis_fmt(mean_24h)} &euro;</div>
     </div>
-    """, unsafe_allow_html=True)
-
-with col2:
-    st.markdown(f"""
-    <div class="card" role="region" aria-label="Aktueller Preis um {uhrzeit} Uhr">
+    <div class="card">
         <div class="card-title">Aktueller Preis &middot; {uhrzeit} Uhr</div>
         <div class="card-value" aria-label="{letzter_preis:.3f} Euro">{preis_fmt(letzter_preis)} &euro;</div>
         <div class="card-delta {delta_class}" aria-label="{abs(delta_val):.2f} Euro {delta_label} als 24h-Schnitt">
             {delta_arrow} {abs(delta_val):.2f} &euro; vs. &Oslash; 24h
         </div>
     </div>
-    """, unsafe_allow_html=True)
-
-with col3:
-    st.markdown(f"""
-    <div class="card" role="region" aria-label="Tendenz nächste 24 Stunden: {tendenz_aria}">
+    <div class="card">
         <div class="card-title">Tendenz nächste 24h</div>
         <div class="tendenz-val {tendenz_class}" aria-label="{tendenz_aria}">{tendenz_pfeil}</div>
         {eval_row}
     </div>
-    """, unsafe_allow_html=True)
+</div>
+""", unsafe_allow_html=True)
 
-st.markdown("<div style='height:1.25rem'></div>", unsafe_allow_html=True)
-
-# ── Empfehlung ──
+# =========================================
+# EMPFEHLUNG
+# =========================================
 if "heute" in prognose["empfehlung"]:
     card_cls, badge_cls, badge_txt = "heute", "badge-heute", "Jetzt tanken"
 elif "morgen" in prognose["empfehlung"]:
@@ -489,7 +468,9 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Chart ──
+# =========================================
+# CHART
+# =========================================
 st.markdown('<div class="section-label" role="heading" aria-level="2">Preisverlauf — 7 Tage + Prognose 24h</div>', unsafe_allow_html=True)
 
 fig = go.Figure()
@@ -537,7 +518,7 @@ fig.add_hline(
     line_color="#BDBDBD",
     annotation_text=f"&Oslash; {mean_24h:.3f} &euro;",
     annotation_position="bottom right",
-    annotation_font=dict(size=12, color="#9E9E9E"),
+    annotation_font=dict(size=13, color="#9E9E9E"),
 )
 
 mitternacht_linien = []
@@ -555,20 +536,20 @@ fig.update_layout(
     shapes=mitternacht_linien,
     plot_bgcolor="#FFFFFF",
     paper_bgcolor="#FFFFFF",
-    font=dict(family="Roboto", size=12, color="#757575"),
+    font=dict(family="Roboto", size=13, color="#757575"),
     xaxis=dict(
         dtick=24 * 3600 * 1000,
         tick0="2020-01-01 12:00:00",
         tickformat="%d.%m.",
         tickangle=0,
-        tickfont=dict(size=12, color="#9E9E9E"),
+        tickfont=dict(size=13, color="#9E9E9E"),
         gridcolor="#F5F5F5",
         showline=True,
         linecolor="#E0E0E0",
         zeroline=False,
     ),
     yaxis=dict(
-        tickfont=dict(size=12, color="#9E9E9E"),
+        tickfont=dict(size=13, color="#9E9E9E"),
         gridcolor="#F5F5F5",
         showline=False,
         zeroline=False,
@@ -578,7 +559,7 @@ fig.update_layout(
     legend=dict(
         orientation="h",
         y=-0.15,
-        font=dict(size=12, color="#757575"),
+        font=dict(size=13, color="#757575"),
         bgcolor="rgba(0,0,0,0)",
     ),
     margin=dict(l=10, r=20, t=15, b=10),
@@ -587,13 +568,15 @@ fig.update_layout(
     hoverlabel=dict(
         bgcolor="#FFFFFF",
         bordercolor="#E0E0E0",
-        font=dict(color="#212529", size=12, family="Roboto"),
+        font=dict(color="#212529", size=13, family="Roboto"),
     ),
 )
 
 st.plotly_chart(fig, use_container_width=True)
 
-# ── Footer ──
+# =========================================
+# FOOTER
+# =========================================
 st.markdown(f"""
 <div class="page-footer" role="contentinfo">
     Preisinformationen von
@@ -604,5 +587,3 @@ st.markdown(f"""
     &middot; DSI Capstone 2026
 </div>
 """, unsafe_allow_html=True)
-
-st.markdown('</div>', unsafe_allow_html=True)
