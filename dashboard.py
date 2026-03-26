@@ -123,7 +123,7 @@ df_hist = pd.concat([
     df_plot[["stunde", "preis"]],
     df_live[df_live["stunde"] >= cutoff_7d][["stunde", "preis"]] if not df_live.empty else pd.DataFrame(columns=["stunde", "preis"]),
     pd.DataFrame([{"stunde": jetzt_ts, "preis": letzter_preis}])
-]).drop_duplicates("stunde").sort_values("stunde").reset_index(drop=True)
+]).sort_values("stunde").drop_duplicates("stunde", keep="last").reset_index(drop=True)
 
 # Rollierende 24h-Bins rückwärts von jetzt_ts
 bin_grenzen = [jetzt_ts - pd.Timedelta(hours=24 * i) for i in range(8, -1, -1)]
