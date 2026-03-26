@@ -247,7 +247,7 @@ fig.add_trace(go.Scatter(
     y=df_hist["preis"],
     mode="lines",
     name="Preisverlauf",
-    line=dict(color="#aaaaaa", width=1.5, shape="linear"),
+    line=dict(color="#aaaaaa", width=1.5, shape="hv"),
 ))
 
 # 24h-Mittel — blau, Stufenlinie
