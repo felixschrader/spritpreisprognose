@@ -82,11 +82,12 @@ prognose_start = letzter_ts
 prognose_ende  = letzter_ts + pd.Timedelta(hours=24)
 
 # =========================================
-# Historische 24h-Bins (Tagesmittel)
+# Plot-Daten vorbereiten
 # =========================================
 cutoff_7d = letzter_ts - pd.Timedelta(days=7)
 df_plot   = df_ext[df_ext["stunde"] >= cutoff_7d].copy()
 
+# 24h-Tagesmittel
 df_plot["bin24h"] = df_plot["stunde"].dt.floor("24h")
 df_24h = (
     df_plot.groupby("bin24h")
@@ -168,7 +169,16 @@ st.subheader("Preisverlauf — letzte 7 Tage + Prognose 24h")
 
 fig = go.Figure()
 
-# Historische 24h-Bins — Stufenlinie
+# 3h-Bins — grau, dünn, im Hintergrund
+fig.add_trace(go.Scatter(
+    x=df_plot["stunde"],
+    y=df_plot["preis"],
+    mode="lines",
+    name="3h-Bins",
+    line=dict(color="#cccccc", width=1, shape="hv"),
+))
+
+# 24h-Tagesmittel — blau, Stufenlinie
 fig.add_trace(go.Scatter(
     x=df_24h["stunde"],
     y=df_24h["preis"],
@@ -177,13 +187,13 @@ fig.add_trace(go.Scatter(
     line=dict(color="#1f77b4", width=2, shape="hv"),
 ))
 
-# Prognose — ein 24h-Bin als Stufenlinie
+# Prognose — ein 24h-Bin, orange, durchgezogen
 fig.add_trace(go.Scatter(
     x=[prognose_start, prognose_ende],
     y=[prognose_preis, prognose_preis],
     mode="lines",
     name="Prognose 24h",
-    line=dict(color="#ff7f0e", width=2, shape="hv", dash="dash"),
+    line=dict(color="#ff7f0e", width=2, shape="hv"),
 ))
 
 # Übergangspunkt
