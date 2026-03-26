@@ -120,34 +120,88 @@ with col3:
 st.divider()
 
 # =========================================
-# Preisverlauf letzte 7 Tage
+# Preisverlauf letzte 7 Tage + Prognose
 # =========================================
-st.subheader("Preisverlauf — letzte 7 Tage")
+st.subheader("Preisverlauf — letzte 7 Tage + Prognose 24h")
+
+@st.cache_data(ttl=300)
+def lade_preisverlauf_extended():
+    df = pd.read_parquet(PARQUET_URL)
+    df = df[df["station_uuid"] == STATION_UUID].copy()
+    df = df[df["diesel"].notna()].copy()
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values("date")
+    df["stunde"] = df["date"].dt.floor("h")
+    df = df.groupby("stunde").agg(preis=("diesel", "mean")).reset_index()
+    return df
+
+df_ext = lade_preisverlauf_extended()
+
+# --- Tagesverlaufsmuster der letzten 4 Wochen ---
+cutoff_4w = df_ext["stunde"].max() - pd.Timedelta(weeks=4)
+df_4w     = df_ext[df_ext["stunde"] >= cutoff_4w].copy()
+df_4w["stunde_des_tages"] = df_4w["stunde"].dt.hour
+
+# Relativer Stundeneffekt: Abweichung vom Tagesmittel
+df_4w["datum"] = df_4w["stunde"].dt.date
+tagesmittel    = df_4w.groupby("datum")["preis"].transform("mean")
+df_4w["delta"] = df_4w["preis"] - tagesmittel
+
+stundeneffekt = df_4w.groupby("stunde_des_tages")["delta"].mean()
+
+# --- Prognose: ab letztem bekannten Preis ---
+letzter_ts    = df_ext["stunde"].max()
+letzter_preis = float(df_ext["preis"].iloc[-1])
+
+prognose_ts     = [letzter_ts + pd.Timedelta(hours=i) for i in range(25)]
+prognose_preise = [letzter_preis]
+
+for i in range(1, 25):
+    stunde_h  = prognose_ts[i].hour
+    effekt    = stundeneffekt.get(stunde_h, 0)
+    naechster = prognose_preise[-1] + effekt * 0.3  # gedämpft
+    prognose_preise.append(naechster)
+
+# --- Letzte 7 Tage für Plot ---
+cutoff_7d = df_ext["stunde"].max() - pd.Timedelta(days=7)
+df_plot   = df_ext[df_ext["stunde"] >= cutoff_7d].copy()
 
 fig = go.Figure()
 
+# Historischer Preisverlauf — Stufenlinie
 fig.add_trace(go.Scatter(
     x=df_plot["stunde"],
     y=df_plot["preis"],
     mode="lines",
     name="Dieselpreis",
-    line=dict(color="#1f77b4", width=1.5),
+    line=dict(color="#1f77b4", width=2, shape="hv"),  # hv = Stufenlinie
+))
+
+# Prognose — gestrichelte Linie
+fig.add_trace(go.Scatter(
+    x=prognose_ts,
+    y=prognose_preise,
+    mode="lines",
+    name="Prognose 24h",
+    line=dict(color="#ff7f0e", width=2, dash="dash", shape="hv"),
 ))
 
 # Aktueller Preis als Punkt
 fig.add_trace(go.Scatter(
-    x=[pd.Timestamp(prognose["timestamp"])],
-    y=[prognose["preis_aktuell"]],
+    x=[letzter_ts],
+    y=[letzter_preis],
     mode="markers",
     name="Aktuell",
     marker=dict(color="red", size=10, symbol="circle"),
+    showlegend=False
 ))
 
-# 24h-Mittel als Linie
+# 24h-Mittel
 fig.add_hline(
     y=prognose["mean_24h_rueck"],
-    line_dash="dash",
+    line_dash="dot",
     line_color="gray",
+    opacity=0.5,
     annotation_text=f"Ø 24h: {prognose['mean_24h_rueck']:.3f} €",
     annotation_position="bottom right"
 )
@@ -157,7 +211,7 @@ fig.update_layout(
     yaxis_title="Preis (€)",
     legend=dict(orientation="h"),
     margin=dict(l=0, r=0, t=10, b=0),
-    height=300,
+    height=350,
 )
 
 st.plotly_chart(fig, use_container_width=True)
