@@ -47,7 +47,7 @@ def lade_preisverlauf():
 @st.cache_data(ttl=60)
 def lade_live_log():
     try:
-        df = pd.read_csv(LOG_URL, parse_dates=["timestamp"])
+        df = pd.read_csv(LOG_URL, parse_dates=["timestamp"], on_bad_lines="skip")
         return df
     except:
         return pd.DataFrame(columns=["timestamp", "preis", "tendenz_24h"])
