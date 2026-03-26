@@ -78,7 +78,6 @@ else:
     delta_erwartet = abs(delta_erwartet)
 
 prognose_preis = letzter_preis + delta_erwartet
-prognose_start = letzter_ts
 prognose_ende  = letzter_ts + pd.Timedelta(hours=24)
 
 # =========================================
@@ -87,15 +86,20 @@ prognose_ende  = letzter_ts + pd.Timedelta(hours=24)
 cutoff_7d = letzter_ts - pd.Timedelta(days=7)
 df_plot   = df_ext[df_ext["stunde"] >= cutoff_7d].copy()
 
-# 24h-Tagesmittel
-df_plot["bin24h"] = df_plot["stunde"].dt.floor("24h")
-df_24h = (
-    df_plot.groupby("bin24h")
-    .agg(preis=("preis", "mean"))
-    .reset_index()
-    .rename(columns={"bin24h": "stunde"})
-    .sort_values("stunde")
-)
+# Rollierende 24h-Bins rückwärts von letzter_ts
+# Bin-Grenzen: letzter_ts - 7d, letzter_ts - 6d, ..., letzter_ts
+bin_grenzen = [letzter_ts - pd.Timedelta(hours=24 * i) for i in range(8, -1, -1)]
+
+df_24h_rows = []
+for i in range(len(bin_grenzen) - 1):
+    start = bin_grenzen[i]
+    ende  = bin_grenzen[i + 1]
+    mask  = (df_plot["stunde"] >= start) & (df_plot["stunde"] < ende)
+    if mask.sum() > 0:
+        mittel = df_plot.loc[mask, "preis"].mean()
+        df_24h_rows.append({"stunde": start, "preis": mittel})
+
+df_24h = pd.DataFrame(df_24h_rows).sort_values("stunde").reset_index(drop=True)
 
 # =========================================
 # Header
@@ -178,18 +182,18 @@ fig.add_trace(go.Scatter(
     line=dict(color="#cccccc", width=1, shape="hv"),
 ))
 
-# 24h-Tagesmittel — blau, Stufenlinie
+# 24h-Tagesmittel — blau, Stufenlinie, ab letzter_ts rückwärts ausgerichtet
 fig.add_trace(go.Scatter(
     x=df_24h["stunde"],
     y=df_24h["preis"],
     mode="lines",
-    name="Tagesmittel",
+    name="24h-Mittel",
     line=dict(color="#1f77b4", width=2, shape="hv"),
 ))
 
-# Prognose — ein 24h-Bin, orange, durchgezogen
+# Prognose — ein 24h-Bin ab letzter_ts, orange, durchgezogen
 fig.add_trace(go.Scatter(
-    x=[prognose_start, prognose_ende],
+    x=[letzter_ts, prognose_ende],
     y=[prognose_preis, prognose_preis],
     mode="lines",
     name="Prognose 24h",
@@ -205,7 +209,7 @@ fig.add_trace(go.Scatter(
     marker=dict(color="red", size=8, symbol="circle"),
 ))
 
-# 24h-Mittel
+# 24h-Mittel-Referenzlinie
 fig.add_hline(
     y=prognose["mean_24h_rueck"],
     line_dash="dot",
