@@ -225,25 +225,40 @@ st.divider()
 # =========================================
 # Empfehlung
 # =========================================
-empfehlung  = prognose["empfehlung"]
-begruendung = prognose["begruendung"]
 
-if "heute" in empfehlung:
-    farbe = "green"
-    emoji = "🟢"
-elif "morgen" in empfehlung:
-    farbe = "orange"
-    emoji = "🟡"
-else:
-    farbe = "red"
-    emoji = "🔴"
+@st.cache_data(ttl=300)
+def generiere_empfehlung(preis, mean_24h, richtung, delta, konfidenz, empfehlung, begruendung):
+    prompt = f"""Du bist ein prägnanter Tankstellen-Assistent. Schreibe einen einzigen natürlichen Satz (max. 25 Wörter) der folgende Situation zusammenfasst:
+- Aktueller Dieselpreis: {preis:.3f} €
+- Ø letzte 24h: {mean_24h:.3f} €
+- Preistrend nächste 24h: {richtung} (Δ {delta:+.3f} €, Konfidenz {konfidenz:.0f}%)
+- Empfehlung: {empfehlung}
+- Begründung: {begruendung}
+Kein Emoji, kein Bulletpoint, nur ein flüssiger Satz."""
+
+    r = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={"Content-Type": "application/json"},
+        json={
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 100,
+            "messages": [{"role": "user", "content": prompt}]
+        },
+        timeout=10
+    )
+    return r.json()["content"][0]["text"]
+
+ki_text = generiere_empfehlung(
+    letzter_preis, mean_24h,
+    prognose["richtung_24h"], delta_erwartet,
+    prognose["konfidenz"], empfehlung, begruendung
+)
+
 
 st.markdown(f"""
-<div style='background-color: {"#d4edda" if farbe=="green" else "#fff3cd" if farbe=="orange" else "#f8d7da"};
+<div style='background-color: {"#d4edda" if "heute" in empfehlung else "#fff3cd" if "morgen" in empfehlung else "#f8d7da"};
             padding: 16px 20px; border-radius: 10px; margin-bottom: 20px;'>
-    <span style='font-size: 1.3em;'>{emoji}</span>
-    <strong style='font-size: 1.1em; margin-left: 8px;'>{empfehlung.capitalize()}</strong>
-    <span style='color: #555; margin-left: 12px; font-size: 0.95em;'>{begruendung}</span>
+    <p style='margin:0; font-size: 1.05em; color: #333;'>{ki_text}</p>
 </div>
 """, unsafe_allow_html=True)
 
