@@ -9,7 +9,7 @@ name: Live Inference — Dieselpreisprognose
 on:
   schedule:
     # Alle 5 Minuten — nur Commit wenn Preis sich geändert hat
-    - cron: '*/5 * * * *'
+    - cron: '15 * * * *'
   workflow_dispatch:
 
 permissions:

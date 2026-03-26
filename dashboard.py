@@ -2,11 +2,13 @@
 # Streamlit Dashboard — Spritpreisprognose ARAL Dürener Str. 407
 # Läuft auf Streamlit Cloud, liest prognose_aktuell.json aus dem Repo
 
+import os
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import requests
-import os
+from datetime import datetime
+import pytz
 
 # =========================================
 # Konfiguration
@@ -21,6 +23,7 @@ STATION_UUID = "e1aefc4e-3ca1-4018-8d91-455b69d35d41"
 JSON_URL     = "https://raw.githubusercontent.com/felixschrader/spritpreisprognose/main/data/ml/prognose_aktuell.json"
 PARQUET_URL  = "https://raw.githubusercontent.com/felixschrader/spritpreisprognose/main/data/tankstellen_preise.parquet"
 LOG_URL      = "https://raw.githubusercontent.com/felixschrader/spritpreisprognose/main/data/ml/preis_live_log.csv"
+BERLIN       = pytz.timezone("Europe/Berlin")
 
 # =========================================
 # Daten laden
@@ -35,8 +38,8 @@ def lade_preisverlauf():
     df = pd.read_parquet(PARQUET_URL)
     df = df[df["station_uuid"] == STATION_UUID].copy()
     df = df[df["diesel"].notna()].copy()
-    df["date"]  = pd.to_datetime(df["date"])
-    df          = df.sort_values("date")
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values("date")
     df["bin3h"] = df["date"].dt.floor("3h")
     df = df.groupby("bin3h").agg(preis=("diesel", "mean")).reset_index()
     df = df.rename(columns={"bin3h": "stunde"})
@@ -53,7 +56,7 @@ def lade_live_log():
 @st.cache_data(ttl=60)
 def lade_aktueller_preis():
     try:
-        key = os.getenv("TANKERKOENIG_KEY", st.secrets["TANKERKOENIG_KEY"])
+        key = st.secrets["TANKERKOENIG_KEY"]
         url = f"https://creativecommons.tankerkoenig.de/json/prices.php?ids={STATION_UUID}&apikey={key}"
         r   = requests.get(url, timeout=5)
         d   = r.json()
@@ -61,9 +64,10 @@ def lade_aktueller_preis():
     except:
         return None
 
-prognose    = lade_prognose()
-df_ext      = lade_preisverlauf()
-df_live_raw = lade_live_log()
+prognose        = lade_prognose()
+df_ext          = lade_preisverlauf()
+df_live_raw     = lade_live_log()
+preis_live      = lade_aktueller_preis()
 
 # Live-Log für Plot aufbereiten
 if not df_live_raw.empty and "timestamp" in df_live_raw.columns:
@@ -87,8 +91,9 @@ if not df_live.empty:
 # Prognose-Wert
 # =========================================
 letzter_ts    = df_ext["stunde"].max()
-letzter_preis_live = lade_aktueller_preis()
-letzter_preis      = letzter_preis_live if letzter_preis_live else float(prognose["preis_aktuell"])
+letzter_preis = preis_live if preis_live else float(prognose["preis_aktuell"])
+jetzt         = datetime.now(BERLIN)
+uhrzeit       = jetzt.strftime("%H:%M")
 
 delta_erwartet = float(prognose["delta_erwartet"])
 if prognose["richtung_24h"] == "fällt":
@@ -117,14 +122,14 @@ for i in range(len(bin_grenzen) - 1):
         mittel = df_plot.loc[mask, "preis"].mean()
         df_24h_rows.append({"stunde": start, "preis": mittel})
 
+# Letzter Bin endet bei letzter_ts — kein Sprung zum aktuellen Live-Preis
 df_24h = pd.DataFrame(df_24h_rows).sort_values("stunde").reset_index(drop=True)
-df_24h = pd.concat([
-    df_24h,
-    pd.DataFrame([{"stunde": letzter_ts, "preis": letzter_preis}])
-]).reset_index(drop=True)
 
 # Mittel der letzten 24h
 mean_24h = float(df_plot[df_plot["stunde"] >= (letzter_ts - pd.Timedelta(hours=24))]["preis"].mean())
+
+# Historische Linie: glatt, endet am roten Punkt (letzter_ts, letzter_preis)
+df_hist = df_plot.copy()
 
 # =========================================
 # Evaluation aus Live-Log
@@ -149,7 +154,7 @@ if not df_live_raw.empty and "tendenz_24h" in df_live_raw.columns:
 # Header
 # =========================================
 st.title("⛽ Diesel-Preisprognose")
-st.caption(f"ARAL Dürener Str. 407, Köln · Stand: {prognose['timestamp']} Uhr")
+st.caption(f"ARAL Dürener Str. 407, Köln · Stand: {uhrzeit} Uhr")
 
 st.divider()
 
@@ -165,7 +170,6 @@ with col1:
     )
 
 with col2:
-    uhrzeit = prognose["timestamp"][11:16]  # HH:MM aus JSON-Timestamp
     st.metric(
         label=f"Aktueller Preis ({uhrzeit} Uhr)",
         value=f"{letzter_preis:.3f} €",
@@ -175,13 +179,10 @@ with col2:
 
 with col3:
     tendenz_pfeil = "↑" if prognose["richtung_24h"] == "steigt" else "↓"
-    tendenz_wert  = f"{delta_erwartet:+.3f} €"
-    konfidenz     = f"{prognose['konfidenz']:.1f}%"
-    zeile2        = eval_text if eval_text else f"Konfidenz: {konfidenz}"
     st.metric(
         label="Tendenz nächste 24h",
-        value=f"{tendenz_pfeil} {tendenz_wert}",
-        help=f"Konfidenz: {konfidenz}"
+        value=f"{tendenz_pfeil} {delta_erwartet:+.3f} €",
+        help=f"Konfidenz: {prognose['konfidenz']:.1f}%"
     )
     if eval_text:
         st.caption(eval_text)
@@ -222,16 +223,16 @@ st.subheader("Preisverlauf — letzte 7 Tage + Prognose 24h")
 
 fig = go.Figure()
 
-# 3h-Bins — grau, dünn, im Hintergrund
+# Historische Linie — grau, glatt, endet am roten Punkt
 fig.add_trace(go.Scatter(
-    x=df_plot["stunde"],
-    y=df_plot["preis"],
+    x=df_hist["stunde"],
+    y=df_hist["preis"],
     mode="lines",
-    name="3h-Bins",
-    line=dict(color="#cccccc", width=1, shape="hv"),
+    name="Preisverlauf",
+    line=dict(color="#aaaaaa", width=1.5, shape="linear"),
 ))
 
-# 24h-Mittel — blau, Stufenlinie
+# 24h-Mittel — blau, Stufenlinie, endet bei letzter_ts ohne Sprung
 fig.add_trace(go.Scatter(
     x=df_24h["stunde"],
     y=df_24h["preis"],
@@ -249,7 +250,7 @@ fig.add_trace(go.Scatter(
     line=dict(color="#ff7f0e", width=2, shape="hv"),
 ))
 
-# Übergangspunkt
+# Übergangspunkt — aktueller Live-Preis
 fig.add_trace(go.Scatter(
     x=[letzter_ts],
     y=[letzter_preis],
