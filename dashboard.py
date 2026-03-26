@@ -304,8 +304,8 @@ fig.update_layout(
     shapes=mitternacht_linien,
     xaxis=dict(
         dtick=12 * 3600 * 1000,
-        tickformat="%d.%m\n%H:%M",
-        tickangle=0,
+        tickformat="%d.%m\n%H Uhr",
+        tickangle=-90,
     ),
     yaxis_title="Preis (€)",
     legend=dict(orientation="h"),
