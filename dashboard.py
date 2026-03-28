@@ -440,6 +440,7 @@ if not df_prognose_linie.empty:
 else:
     df_prognose_bin = pd.DataFrame(columns=["stunde", "preis"])
 
+# Median auf 1h-Bins (robuster gegen Morning-Spike)
 df_24h_raw = df_hist[df_hist["stunde"] >= (jetzt_ts - pd.Timedelta(hours=24))].copy()
 df_24h_raw["stunde_bin"] = df_24h_raw["stunde"].dt.floor("h")
 mean_24h = float(df_24h_raw.groupby("stunde_bin")["preis"].median().median())
@@ -665,12 +666,12 @@ with tab2:
     df_tag["ratio_es"]    = df_tag["n_erhoehungen"] / df_tag["n_senkungen"].replace(0, np.nan)
     df_tag["roll7_ratio"] = df_tag["ratio_es"].rolling(7, min_periods=1).mean()
 
-    def chart_layout(height=220):
-        return dict(plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
-                    height=height, margin=dict(l=10, r=10, t=10, b=10),
-                    legend=dict(orientation="h", y=-0.35, font=dict(size=12)),
-                    xaxis=dict(gridcolor="#F5F5F5"),
-                    yaxis=dict(gridcolor="#F5F5F5", zeroline=False))
+    BASE_LAYOUT = dict(
+        plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+        margin=dict(l=10, r=10, t=10, b=10),
+        legend=dict(orientation="h", y=-0.35, font=dict(size=12)),
+        xaxis=dict(gridcolor="#F5F5F5"),
+    )
 
     # Änderungen/Tag
     st.markdown('<div class="section-label">Änderungen pro Tag (7-Tage-Glättung)</div>',
@@ -680,7 +681,8 @@ with tab2:
         mode="lines", name="Roh", line=dict(color="#E0E0E0", width=1)))
     fig2.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["roll7_aend"],
         mode="lines", name="Geglättet (7T)", line=dict(color="#1565C0", width=2.5)))
-    fig2.update_layout(**chart_layout())
+    fig2.update_layout(**BASE_LAYOUT, height=220,
+        yaxis=dict(gridcolor="#F5F5F5", zeroline=False))
     st.plotly_chart(fig2, use_container_width=True)
 
     # Erhöhungen/Senkungen + Ratio
@@ -695,8 +697,8 @@ with tab2:
         mode="lines", name="Ratio E/S", line=dict(color="#1565C0", width=2, dash="dot"),
         yaxis="y2"))
     fig3.update_layout(
-        plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
-        height=240, margin=dict(l=10, r=50, t=10, b=10),
+        plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF", height=240,
+        margin=dict(l=10, r=50, t=10, b=10),
         legend=dict(orientation="h", y=-0.35, font=dict(size=12)),
         xaxis=dict(gridcolor="#F5F5F5"),
         yaxis=dict(gridcolor="#F5F5F5", zeroline=False, title="Anzahl"),
@@ -718,10 +720,7 @@ with tab2:
     fig4.add_trace(go.Scatter(x=df_iqr["tag"], y=df_iqr["roll7"]*100,
         mode="lines", name="Geglättet (7T)", line=dict(color="#6A1B9A", width=2.5),
         fill="tozeroy", fillcolor="rgba(106,27,154,0.08)"))
-    fig4.add_hline(y=df_iqr["preis"].mean()*100, line_dash="dash",
-                   line_color="#9E9E9E", line_width=1,
-                   annotation_text=f"Ø {df_iqr['preis'].mean()*100:.1f} ct")
-    fig4.update_layout(**chart_layout(),
+    fig4.update_layout(**BASE_LAYOUT, height=220,
         yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct"))
     st.plotly_chart(fig4, use_container_width=True)
 
@@ -737,7 +736,7 @@ with tab2:
     fig5.add_trace(go.Scatter(x=df_vol["tag"], y=df_vol["roll7"]*100,
         mode="lines", name="Geglättet (7T)", line=dict(color="#E65100", width=2.5),
         fill="tozeroy", fillcolor="rgba(230,81,0,0.08)"))
-    fig5.update_layout(**chart_layout(),
+    fig5.update_layout(**BASE_LAYOUT, height=220,
         yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct"))
     st.plotly_chart(fig5, use_container_width=True)
 
