@@ -591,8 +591,7 @@ with tab1:
         marker=dict(color="#FFFFFF", size=10, symbol="circle",
                     line=dict(color="#1565C0", width=2.5)),
     ))
-    fig.add_vline(x=jetzt_ts, line_width=1, line_dash="dash", line_color="#BDBDBD",
-                  annotation_text="jetzt", annotation_position="top right")
+    fig.add_vline(x=jetzt_ts, line_width=1, line_dash="dash", line_color="#BDBDBD")
 
     # Mitternacht-Linien
     mitternacht = []
