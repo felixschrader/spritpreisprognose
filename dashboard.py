@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
 st.set_page_config(
@@ -24,11 +24,15 @@ LOG_URL      = f"{BASE_URL}/data/ml/preis_live_log.csv"
 PROG_LOG_URL = f"{BASE_URL}/data/ml/prognose_log.csv"
 BERLIN       = pytz.timezone("Europe/Berlin")
 
-OEFFNUNGSZEITEN = {
-    "Mo–Fr": "06:00–22:00",
-    "Sa":    "07:00–22:00",
-    "So":    "08:00–22:00",
-}
+# Öffnungszeiten ARAL Dürener Str. 407
+OEFFNUNG_VON = 6   # 06:00 Uhr
+OEFFNUNG_BIS = 22  # 22:00 Uhr (letzte angezeigte Stunde: 21:xx)
+
+OEFFNUNGSZEITEN = [
+    ("Mo – Fr", "06:00 – 22:00"),
+    ("Sa",      "07:00 – 22:00"),
+    ("So",      "08:00 – 22:00"),
+]
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -47,7 +51,7 @@ html, body, [class*="css"], .stApp {
 /* TOPBAR */
 .topbar {
     background: #1565C0;
-    padding: 1rem 2rem;
+    padding: 1.2rem 2rem;
     box-shadow: 0 2px 8px rgba(0,0,0,0.18);
     margin-bottom: 1.5rem;
     display: flex; align-items: flex-start;
@@ -56,19 +60,24 @@ html, body, [class*="css"], .stApp {
 .topbar-left { flex: 1; }
 .topbar-title {
     font-size: 2.2rem; font-weight: 500;
-    color: #FFFFFF; line-height: 1.15; letter-spacing: 0.01em;
+    color: #FFFFFF; line-height: 1.15;
 }
 .topbar-addr {
-    font-size: 1.05rem; color: rgba(255,255,255,0.9);
-    margin-top: 4px;
+    font-size: 1.1rem; color: rgba(255,255,255,0.92);
+    margin-top: 6px;
 }
 .topbar-hours {
-    font-size: 0.85rem; color: rgba(255,255,255,0.75);
-    margin-top: 6px; display: flex; gap: 1.2rem; flex-wrap: wrap;
+    margin-top: 10px;
+    display: flex; flex-direction: column; gap: 3px;
 }
+.topbar-hours-row {
+    font-size: 0.95rem; color: rgba(255,255,255,0.8);
+    display: flex; gap: 0.6rem;
+}
+.topbar-hours-row b { color: rgba(255,255,255,0.95); font-weight: 500; min-width: 60px; }
 .topbar-right {
     display: flex; flex-direction: column;
-    align-items: flex-end; gap: 0.5rem;
+    align-items: flex-end; gap: 0.6rem; flex-shrink: 0;
 }
 .topbar-time {
     font-family: 'Roboto Mono', monospace;
@@ -77,15 +86,6 @@ html, body, [class*="css"], .stApp {
     padding: 6px 14px; border-radius: 4px;
     white-space: nowrap;
 }
-.refresh-btn {
-    font-size: 0.82rem; color: rgba(255,255,255,0.85);
-    background: rgba(255,255,255,0.12);
-    border: 1px solid rgba(255,255,255,0.25);
-    padding: 5px 12px; border-radius: 4px;
-    cursor: pointer; text-decoration: none;
-    white-space: nowrap;
-}
-.refresh-btn:hover { background: rgba(255,255,255,0.2); }
 
 /* METRIC CARDS */
 .metric-grid {
@@ -112,7 +112,6 @@ html, body, [class*="css"], .stApp {
 .delta-green  { color: #2E7D32; }
 .delta-red    { color: #C62828; }
 .delta-blue   { color: #1565C0; }
-.delta-orange { color: #E65100; }
 .tendenz-val  { font-size: clamp(2.2rem, 3.5vw, 3rem); font-weight: 300; line-height: 1; }
 .tendenz-down { color: #2E7D32; }
 .tendenz-up   { color: #C62828; }
@@ -123,8 +122,7 @@ html, body, [class*="css"], .stApp {
     background: #FFFFFF; border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.06);
     padding: 1.4rem 1.5rem 1rem 1.5rem;
-    border-left: 5px solid #1565C0;
-    margin-bottom: 1.5rem;
+    border-left: 5px solid #1565C0; margin-bottom: 1.5rem;
 }
 .empfehlung-card.heute  { border-left-color: #2E7D32; }
 .empfehlung-card.morgen { border-left-color: #E65100; }
@@ -137,9 +135,7 @@ html, body, [class*="css"], .stApp {
 .badge-heute  { background: #E8F5E9; color: #1B5E20; }
 .badge-morgen { background: #FFF3E0; color: #BF360C; }
 .badge-warten { background: #FFEBEE; color: #B71C1C; }
-.empfehlung-text {
-    font-size: 1.05rem; color: #212121; line-height: 1.7;
-}
+.empfehlung-text { font-size: 1.05rem; color: #212121; line-height: 1.7; }
 .empfehlung-text strong { color: #1A1A1A; font-weight: 500; }
 .ki-footer {
     font-size: 0.78rem; color: #9E9E9E;
@@ -175,26 +171,34 @@ html, body, [class*="css"], .stApp {
     color: #9E9E9E; margin-top: 4px;
 }
 
-/* TAGES-KACHELN */
-.tag-grid {
-    display: flex; flex-wrap: wrap; gap: 6px;
-    margin-bottom: 1rem;
+/* TAGES-KACHELN — Kalender-Layout */
+.kalender-woche {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 4px;
+}
+.kalender-header {
+    text-align: center;
+    font-size: 0.68rem; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: #9E9E9E; padding: 4px 0;
 }
 .tag-kachel {
-    width: 48px; height: 56px;
-    border-radius: 6px; display: flex;
-    flex-direction: column; align-items: center;
-    justify-content: center; gap: 2px;
+    border-radius: 6px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 2px; padding: 6px 2px;
     font-size: 0.68rem; font-weight: 500;
-    letter-spacing: 0.02em;
 }
-.tag-kachel.korrekt   { background: #E8F5E9; color: #1B5E20; border: 1px solid #A5D6A7; }
-.tag-kachel.falsch    { background: #FFEBEE; color: #B71C1C; border: 1px solid #EF9A9A; }
-.tag-kachel.datum     { font-size: 0.62rem; color: inherit; }
-.tag-kachel.symbol    { font-size: 1.1rem; }
+.tag-kachel.korrekt { background: #E8F5E9; color: #1B5E20; border: 1px solid #A5D6A7; }
+.tag-kachel.falsch  { background: #FFEBEE; color: #B71C1C; border: 1px solid #EF9A9A; }
+.tag-kachel.leer    { background: transparent; border: 1px solid #F0F0F0; }
+.tag-symbol { font-size: 1rem; }
+.tag-datum  { font-size: 0.62rem; }
+.tag-delta  { font-size: 0.60rem; opacity: 0.85; }
 
 /* TABS */
-.stTabs [data-baseweb="tab-list"] { gap: 0.5rem; }
 .stTabs [data-baseweb="tab"] {
     font-size: 1rem !important; font-weight: 500 !important;
     padding: 0.6rem 1.2rem !important;
@@ -215,6 +219,7 @@ html, body, [class*="css"], .stApp {
     .topbar      { flex-direction: column; padding: 1rem; }
     .topbar-right { align-items: flex-start; }
     .topbar-title { font-size: 1.6rem; }
+    .kalender-woche { grid-template-columns: repeat(4, 1fr); }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -266,22 +271,20 @@ def lade_prognose_log():
 
 @st.cache_data(ttl=3600)
 def generiere_empfehlung(preis, mean_24h, richtung_tage, empfehlung_tage, brent_delta, residuum):
-    facts = f"""Aktueller Dieselpreis: {preis:.3f} € ({preis - mean_24h:+.3f} € vs. 24h-Schnitt)
-Tages-Modell (Random Forest, Horizont 2 Tage): {richtung_tage} — {empfehlung_tage}
-Brent-Delta heute: {brent_delta:+.2f} €/Barrel
-ARAL vs. NRW-Markt: {residuum:+.1f} Cent"""
-
-    prompt = f"""Du bist ein nüchterner Datenanalyst. Schreibe 2 Sätze auf Deutsch.
+    prompt = f"""Du bist ein nüchterner Datenanalyst. Schreibe genau 2 Sätze auf Deutsch.
 
 Daten:
-{facts}
+- Aktueller Preis: {preis:.3f} € ({preis - mean_24h:+.3f} € vs. 24h-Schnitt)
+- Tages-Modell (Horizont 2 Tage): Richtung {richtung_tage} → {empfehlung_tage}
+- Brent-Delta: {brent_delta:+.2f} €/Barrel
+- ARAL vs. NRW-Markt: {residuum:+.1f} Cent
 
 Regeln:
-- Erster Satz fett mit **: klare Handlungsempfehlung
-- Zweiter Satz: kurze Begründung mit konkreten Datenpunkten
-- Kein Werbesprech, kein "Sparfuchs", keine Floskeln
-- Keine Eurobeträge für zukünftige Preise nennen
-- Maximal 50 Wörter gesamt"""
+- Satz 1 fett (**...**): präzise Handlungsempfehlung, max. 15 Wörter
+- Satz 2: Begründung mit 2 konkreten Datenpunkten aus den Daten oben
+- Kein Werbesprech, keine Floskeln, keine Konjunktive
+- Keine absoluten Eurobeträge für zukünftige Preise
+- Maximal 45 Wörter gesamt"""
 
     r = requests.post(
         "https://api.anthropic.com/v1/messages",
@@ -290,22 +293,91 @@ Regeln:
             "x-api-key": st.secrets["ANTHROPIC_API_KEY"],
             "anthropic-version": "2023-06-01",
         },
-        json={"model": "claude-haiku-4-5-20251001", "max_tokens": 150,
+        json={"model": "claude-haiku-4-5-20251001", "max_tokens": 120,
               "messages": [{"role": "user", "content": prompt}]},
         timeout=10
     )
     return r.json()["content"][0]["text"]
 
+# ── Hilfsfunktionen ───────────────────────────────────────────────────────────
+def preis_fmt(p):
+    s = f"{p:.3f}"
+    return f"{s[:-1]}<sup>{s[-1]}</sup>"
+
+def bold(text):
+    return text.replace("**", "<strong>", 1).replace("**", "</strong>", 1)
+
+def ist_offen(stunde_h, wochentag):
+    """Gibt True zurück wenn die Tankstelle in dieser Stunde geöffnet ist."""
+    if wochentag == 5:   # Samstag
+        return 7 <= stunde_h < 22
+    elif wochentag == 6: # Sonntag
+        return 8 <= stunde_h < 22
+    else:                # Mo–Fr
+        return 6 <= stunde_h < 22
+
+def baue_prognose_linie(jetzt_ts, letzter_preis, kern_preis, pred_delta_cent,
+                        stunden_mittel_dict, stunden_std_dict):
+    """
+    Baut die Prognose-Linie bis Mitternacht übermorgen.
+    Methode:
+    - Basis: rolling 28-Tage Stundenmittelwert + Offset (Verankerung am aktuellen Preis)
+    - Kernpreis (13-20h) wird um pred_delta_cent verschoben (Modell-Signal)
+    - Morning-Spike (06h) wird aus historischem Abstand p10→06h berechnet
+    - Geschlossene Stunden werden nicht angezeigt
+    """
+    # Offset: aktueller Preis verankert die Linie
+    basis_h = stunden_mittel_dict.get(jetzt_ts.hour, letzter_preis)
+    offset  = letzter_preis - basis_h
+
+    # Kernpreis-Shift: Modell sagt +X Cent in 2 Tagen
+    # Wir verteilen den Shift linear über die Kernzeit-Stunden
+    kern_shift_pro_stunde = pred_delta_cent / 100 / len(range(13, 21))
+
+    # Endpunkt: Mitternacht übermorgen
+    uebermorgen = (jetzt_ts + timedelta(days=2)).normalize()
+
+    punkte = []
+    ts = jetzt_ts.floor("h") + timedelta(hours=1)
+
+    while ts <= uebermorgen:
+        wochentag = ts.dayofweek
+        stunde_h  = ts.hour
+
+        if not ist_offen(stunde_h, wochentag):
+            ts += timedelta(hours=1)
+            continue
+
+        hist_basis = stunden_mittel_dict.get(stunde_h, letzter_preis) + offset
+
+        # Tage seit jetzt (für lineare Interpolation des Kernpreis-Shifts)
+        tage_seit_jetzt = (ts - jetzt_ts).total_seconds() / 86400
+
+        # Kernzeit-Stunden bekommen den Modell-Shift (linear interpoliert)
+        if 13 <= stunde_h < 21:
+            shift = pred_delta_cent / 100 * min(tage_seit_jetzt / 2.0, 1.0)
+        else:
+            shift = 0.0
+
+        punkte.append({
+            "stunde": ts,
+            "preis":  round(hist_basis + shift, 4),
+        })
+        ts += timedelta(hours=1)
+
+    return pd.DataFrame(punkte)
+
 # ── Daten zusammenführen ──────────────────────────────────────────────────────
-prognose      = lade_prognose()
-tages         = lade_tagesprognose()
-df_ext        = lade_preisverlauf()
-df_live_raw   = lade_live_log()
-preis_live    = lade_aktueller_preis()
-df_prog_log   = lade_prognose_log()
+prognose    = lade_prognose()
+tages       = lade_tagesprognose()
+df_ext      = lade_preisverlauf()
+df_live_raw = lade_live_log()
+preis_live  = lade_aktueller_preis()
+df_prog_log = lade_prognose_log()
 
 if not df_live_raw.empty and "timestamp" in df_live_raw.columns:
-    df_live = df_live_raw[["timestamp", "preis"]].rename(columns={"timestamp": "stunde"}).copy()
+    df_live = df_live_raw[["timestamp", "preis"]].rename(
+        columns={"timestamp": "stunde"}).copy()
     df_live["stunde"] = pd.to_datetime(df_live["stunde"])
     df_live = df_live.sort_values("stunde").drop_duplicates("stunde").reset_index(drop=True)
 else:
@@ -315,7 +387,8 @@ if not df_live.empty:
     binned = df_live.copy()
     binned["stunde"] = binned["stunde"].dt.floor("3h")
     binned = binned.groupby("stunde").agg(preis=("preis", "last")).reset_index()
-    df_ext = pd.concat([df_ext, binned]).drop_duplicates("stunde", keep="last").sort_values("stunde").reset_index(drop=True)
+    df_ext = pd.concat([df_ext, binned]).drop_duplicates(
+        "stunde", keep="last").sort_values("stunde").reset_index(drop=True)
 
 jetzt_ts      = pd.Timestamp(datetime.now(BERLIN)).tz_localize(None)
 letzter_preis = preis_live if preis_live else float(prognose.get("preis_aktuell", 0))
@@ -327,50 +400,49 @@ empfehlung_tage = tages.get("empfehlung", "—")
 brent_delta2    = float(tages.get("brent_delta2", 0))
 residuum_cent   = float(tages.get("residuum_heute", 0))
 pred_delta_cent = float(tages.get("predicted_delta_cent", 0))
+kern_preis      = float(tages.get("kernpreis_aktuell", letzter_preis))
 
-# Historische Stundenmittelwerte (28 Tage) für Prognose-Linie
+# Historische Basis (28 Tage)
 cutoff_7d  = jetzt_ts - pd.Timedelta(days=7)
 cutoff_28d = jetzt_ts - pd.Timedelta(days=28)
+
 df_hist = pd.concat([
     df_ext[df_ext["stunde"] >= cutoff_7d][["stunde", "preis"]],
-    df_live[df_live["stunde"] >= cutoff_7d][["stunde", "preis"]] if not df_live.empty else pd.DataFrame(columns=["stunde", "preis"]),
+    df_live[df_live["stunde"] >= cutoff_7d][["stunde", "preis"]] if not df_live.empty
+        else pd.DataFrame(columns=["stunde", "preis"]),
     pd.DataFrame([{"stunde": jetzt_ts, "preis": letzter_preis}])
 ]).sort_values("stunde").drop_duplicates("stunde", keep="last").reset_index(drop=True)
 
+# Öffnungszeiten-Filter für Historik
+df_hist["stunde_h"]  = df_hist["stunde"].dt.hour
+df_hist["wochentag"] = df_hist["stunde"].dt.dayofweek
+df_hist = df_hist[df_hist.apply(
+    lambda r: ist_offen(r["stunde_h"], r["wochentag"]), axis=1
+)].reset_index(drop=True)
+
+# Rolling 28-Tage Stundenmittelwerte
 hist_28d = df_ext[df_ext["stunde"] >= cutoff_28d].copy()
 hist_28d["stunde_h"] = hist_28d["stunde"].dt.hour
-stunden_mittel = hist_28d.groupby("stunde_h")["preis"].mean()
-stunden_std    = hist_28d.groupby("stunde_h")["preis"].std().fillna(0)
+stunden_mittel = hist_28d.groupby("stunde_h")["preis"].mean().to_dict()
+stunden_std    = hist_28d.groupby("stunde_h")["preis"].std().fillna(0).to_dict()
 
-# Prognose-Linie mit Morning-Spike (3h-Bins)
-prognose_stufen = prognose.get("prognose_stufen", [])
-df_prognose_linie = pd.DataFrame()
+# Prognose-Linie
+df_prognose_linie = baue_prognose_linie(
+    jetzt_ts, letzter_preis, kern_preis,
+    pred_delta_cent, stunden_mittel, stunden_std
+)
 
-if prognose_stufen:
-    punkte = [{"stunde": jetzt_ts, "preis": letzter_preis}]
-    preis_sim = letzter_preis
-    basis_h   = float(stunden_mittel.get(jetzt_ts.hour, letzter_preis))
-    offset    = letzter_preis - basis_h
+# 3h-Bins für Prognose-Darstellung
+if not df_prognose_linie.empty:
+    df_prognose_linie["stunde_bin"] = df_prognose_linie["stunde"].dt.floor("3h")
+    df_prognose_bin = df_prognose_linie.groupby("stunde_bin")["preis"].mean().reset_index()
+    df_prognose_bin = df_prognose_bin.rename(columns={"stunde_bin": "stunde"})
+else:
+    df_prognose_bin = pd.DataFrame(columns=["stunde", "preis"])
 
-    for s in prognose_stufen:
-        ts     = jetzt_ts + pd.Timedelta(hours=s["stunde_offset"])
-        ziel_h = ts.hour
-        # Historischer Stundenmittelwert + offset (verankert am aktuellen Preis)
-        hist_h     = float(stunden_mittel.get(ziel_h, letzter_preis)) + offset
-        # Morning-Spike: 05h–07h historisch höher — bleibt erhalten
-        # Richtungstweak: kleiner Drift aus Modell
-        DRIFT = 0.002
-        richtung_s = s.get("richtung", "stabil")
-        drift = DRIFT * (1 if richtung_s == "steigt" else -1 if richtung_s == "fällt" else 0)
-        preis_sim = hist_h + drift * s["stunde_offset"]
-        punkte.append({"stunde": ts, "preis": round(preis_sim, 4)})
-
-    df_prognose_linie = pd.DataFrame(punkte)
-    # 3h-Bins für Prognose
-    df_prognose_linie["stunde"] = df_prognose_linie["stunde"].dt.floor("3h")
-    df_prognose_linie = df_prognose_linie.groupby("stunde")["preis"].mean().reset_index()
-
-mean_24h = float(df_hist[df_hist["stunde"] >= (jetzt_ts - pd.Timedelta(hours=24))]["preis"].mean())
+df_24h_raw = df_hist[df_hist["stunde"] >= (jetzt_ts - pd.Timedelta(hours=24))].copy()
+df_24h_raw["stunde_bin"] = df_24h_raw["stunde"].dt.floor("h")
+mean_24h = float(df_24h_raw.groupby("stunde_bin")["preis"].median().median())
 
 # KI-Empfehlung
 try:
@@ -382,28 +454,38 @@ try:
 except:
     ki_text = f"**{empfehlung_tage.capitalize()}.** {tages.get('begruendung', '')}"
 
-def preis_fmt(p):
-    s = f"{p:.3f}"
-    return f"{s[:-1]}<sup>{s[-1]}</sup>"
-
-def bold(text):
-    return text.replace("**", "<strong>", 1).replace("**", "</strong>", 1)
+# Empfehlungs-Klasse
+if "heute" in empfehlung_tage:
+    card_cls, badge_cls, badge_txt = "heute", "badge-heute", "Jetzt tanken"
+elif "übermorgen" in empfehlung_tage or "später" in empfehlung_tage or "warten" in empfehlung_tage:
+    card_cls, badge_cls, badge_txt = "morgen", "badge-morgen", "Warten"
+elif "flexibel" in empfehlung_tage:
+    card_cls, badge_cls, badge_txt = "heute", "badge-heute", "Flexibel"
+else:
+    card_cls, badge_cls, badge_txt = "warten", "badge-warten", "Abwarten"
 
 # ── TOPBAR ────────────────────────────────────────────────────────────────────
-oeff_str = " · ".join(f"<b>{k}</b> {v}" for k, v in OEFFNUNGSZEITEN.items())
+oeff_rows = "".join(
+    f'<div class="topbar-hours-row"><b>{tag}</b> {zeiten}</div>'
+    for tag, zeiten in OEFFNUNGSZEITEN
+)
 st.markdown(f"""
 <div class="topbar">
     <div class="topbar-left">
         <div class="topbar-title">Dieselpreisprognose</div>
-        <div class="topbar-addr">ARAL · Dürener Str. 407 · 50931 Köln</div>
-        <div class="topbar-hours">{oeff_str}</div>
+        <div class="topbar-addr">ARAL · Dürener Str. 407 · 50931 Köln-Lindenthal</div>
+        <div class="topbar-hours">{oeff_rows}</div>
     </div>
     <div class="topbar-right">
         <span class="topbar-time">Live · {uhrzeit} Uhr</span>
-        <a href="javascript:window.location.reload()" class="refresh-btn">↺ Aktualisieren</a>
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+# Refresh-Button als Streamlit-Button (kein JS-Link)
+if st.button("↺ Aktualisieren", key="refresh"):
+    st.cache_data.clear()
+    st.rerun()
 
 # ── METRIKEN ──────────────────────────────────────────────────────────────────
 delta_val   = letzter_preis - mean_24h
@@ -411,16 +493,19 @@ delta_cls   = "delta-green" if delta_val < 0 else "delta-red"
 delta_arrow = "↓" if delta_val < 0 else "↑"
 
 if richtung_tage == "fällt":
-    tend_pfeil, tend_cls, tend_sub = "↓", "tendenz-down", "Preis fällt übermorgen"
+    tend_pfeil, tend_cls = "↓", "tendenz-down"
+    tend_sub = f"Preis fällt übermorgen · {pred_delta_cent:+.1f} ct"
 elif richtung_tage == "steigt":
-    tend_pfeil, tend_cls, tend_sub = "↑", "tendenz-up", "Preis steigt übermorgen"
+    tend_pfeil, tend_cls = "↑", "tendenz-up"
+    tend_sub = f"Preis steigt übermorgen · {pred_delta_cent:+.1f} ct"
 else:
-    tend_pfeil, tend_cls, tend_sub = "→", "tendenz-flat", "Preis stabil"
+    tend_pfeil, tend_cls = "→", "tendenz-flat"
+    tend_sub = "Kein klares Signal"
 
 st.markdown(f"""
 <div class="metric-grid">
     <div class="card">
-        <div class="card-title">Ø letzte 24 Stunden</div>
+        <div class="card-title">Median letzte 24 Stunden</div>
         <div class="card-value">{preis_fmt(mean_24h)} &euro;</div>
     </div>
     <div class="card">
@@ -431,24 +516,20 @@ st.markdown(f"""
     <div class="card">
         <div class="card-title">Tages-Prognose · übermorgen</div>
         <div class="tendenz-val {tend_cls}">{tend_pfeil}</div>
-        <div class="card-delta delta-blue">{tend_sub} · {pred_delta_cent:+.1f} ct</div>
+        <div class="card-delta delta-blue">{tend_sub}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 # ── EMPFEHLUNG ────────────────────────────────────────────────────────────────
-if "heute" in empfehlung_tage:
-    card_cls, badge_cls, badge_txt = "heute", "badge-heute", "Jetzt tanken"
-elif "übermorgen" in empfehlung_tage or "später" in empfehlung_tage:
-    card_cls, badge_cls, badge_txt = "morgen", "badge-morgen", "Warten"
-else:
-    card_cls, badge_cls, badge_txt = "warten", "badge-warten", "Flexibel"
-
 st.markdown(f"""
 <div class="empfehlung-card {card_cls}">
     <div class="empfehlung-badge {badge_cls}">{badge_txt}</div>
     <div class="empfehlung-text">{bold(ki_text)}</div>
-    <div class="ki-footer">KI-generiert · <a href="https://www.anthropic.com" target="_blank">Claude API · Anthropic</a> · Keine Garantie</div>
+    <div class="ki-footer">
+        KI-generiert · <a href="https://www.anthropic.com" target="_blank">Claude API · Anthropic</a>
+        · Keine Garantie
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -457,12 +538,15 @@ tab1, tab2, tab3 = st.tabs(["📈 Preisverlauf", "🔍 Algo-KPIs", "📊 Modell-
 
 # ─── TAB 1: Preisverlauf ─────────────────────────────────────────────────────
 with tab1:
-    st.markdown('<div class="section-label">Preisverlauf — 7 Tage + Prognose 24h</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">Preisverlauf — 7 Tage + Prognose bis übermorgen</div>',
+                unsafe_allow_html=True)
+    st.caption("Darstellung in 3h-Bins · Nur Öffnungszeiten (Mo–Fr 06–22h, Sa 07–22h, So 08–22h)")
 
     # 3h-Bins für historischen Verlauf
     df_hist_bin = df_hist.copy()
-    df_hist_bin["stunde"] = df_hist_bin["stunde"].dt.floor("3h")
-    df_hist_bin = df_hist_bin.groupby("stunde")["preis"].mean().reset_index()
+    df_hist_bin["stunde_bin"] = df_hist_bin["stunde"].dt.floor("3h")
+    df_hist_bin = df_hist_bin.groupby("stunde_bin")["preis"].mean().reset_index()
+    df_hist_bin = df_hist_bin.rename(columns={"stunde_bin": "stunde"})
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -477,7 +561,8 @@ with tab1:
     for i in range(len(bin_grenzen)-1):
         mask = (df_hist["stunde"] >= bin_grenzen[i]) & (df_hist["stunde"] < bin_grenzen[i+1])
         if mask.sum() > 0:
-            df_24h_rows.append({"stunde": bin_grenzen[i], "preis": df_hist.loc[mask, "preis"].mean()})
+            df_24h_rows.append({"stunde": bin_grenzen[i],
+                                 "preis": df_hist.loc[mask, "preis"].mean()})
     if df_24h_rows:
         df_24h = pd.DataFrame(df_24h_rows + [{"stunde": jetzt_ts, "preis": letzter_preis}])
         fig.add_trace(go.Scatter(
@@ -486,27 +571,37 @@ with tab1:
             line=dict(color="#1565C0", width=2.5, shape="hv"),
         ))
 
-    # Prognose-Linie mit Morning-Spike
-    if not df_prognose_linie.empty:
+    # Prognose-Linie (3h-Bins, bis Mitternacht übermorgen)
+    if not df_prognose_bin.empty:
+        # Verbindungspunkt: aktueller Preis
+        df_prog_plot = pd.concat([
+            pd.DataFrame([{"stunde": jetzt_ts, "preis": letzter_preis}]),
+            df_prognose_bin
+        ]).reset_index(drop=True)
         fig.add_trace(go.Scatter(
-            x=df_prognose_linie["stunde"], y=df_prognose_linie["preis"],
-            mode="lines", name="Prognose 24h",
+            x=df_prog_plot["stunde"], y=df_prog_plot["preis"],
+            mode="lines", name="Prognose (3h-Bin)",
             line=dict(color="#E65100", width=2, shape="hv", dash="dot"),
         ))
 
+    # Aktueller Zeitpunkt
     fig.add_trace(go.Scatter(
         x=[jetzt_ts], y=[letzter_preis],
         mode="markers", showlegend=False,
         marker=dict(color="#FFFFFF", size=10, symbol="circle",
                     line=dict(color="#1565C0", width=2.5)),
     ))
-    fig.add_vline(x=jetzt_ts, line_width=1, line_dash="dash", line_color="#BDBDBD")
+    fig.add_vline(x=jetzt_ts, line_width=1, line_dash="dash", line_color="#BDBDBD",
+                  annotation_text="jetzt", annotation_position="top right")
 
+    # Mitternacht-Linien
     mitternacht = []
     tag = cutoff_7d.normalize()
-    while tag <= jetzt_ts + pd.Timedelta(days=1):
+    uebermorgen_mitternacht = (jetzt_ts + pd.Timedelta(days=2)).normalize()
+    while tag <= uebermorgen_mitternacht:
         mitternacht.append(dict(type="line", x0=tag, x1=tag, y0=0, y1=1,
-                                xref="x", yref="paper", line=dict(color="#EEEEEE", width=1)))
+                                xref="x", yref="paper",
+                                line=dict(color="#EEEEEE", width=1)))
         tag += pd.Timedelta(days=1)
 
     fig.update_layout(
@@ -521,7 +616,7 @@ with tab1:
         legend=dict(orientation="h", y=-0.18, font=dict(size=13, color="#757575"),
                     bgcolor="rgba(0,0,0,0)"),
         margin=dict(l=10, r=20, t=15, b=10),
-        height=370, hovermode="x unified",
+        height=380, hovermode="x unified",
         hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="#E0E0E0",
                         font=dict(color="#212529", size=13, family="Roboto")),
     )
@@ -529,7 +624,8 @@ with tab1:
 
 # ─── TAB 2: Algo-KPIs ────────────────────────────────────────────────────────
 with tab2:
-    st.markdown('<div class="section-label">Algorithmus-Analyse — letzte 90 Tage</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">Algorithmus-Analyse — letzte 90 Tage</div>',
+                unsafe_allow_html=True)
 
     cutoff_90d = jetzt_ts - pd.Timedelta(days=90)
     df_90 = df_hist[df_hist["stunde"] >= cutoff_90d].copy().sort_values("stunde")
@@ -537,12 +633,13 @@ with tab2:
     df_90["tag"]      = df_90["stunde"].dt.date
     df_90["stunde_h"] = df_90["stunde"].dt.hour
 
-    erhoehungen = (df_90["delta"] > 0.001).sum()
-    senkungen   = (df_90["delta"] < -0.001).sum()
-    ratio       = erhoehungen / senkungen if senkungen > 0 else 0
-    aend_tag    = df_90.groupby("tag")["delta"].count().mean()
-    kern_90     = df_90[df_90["stunde_h"].between(13, 20)]
-    iqr_kern    = kern_90.groupby("tag")["preis"].agg(lambda x: x.quantile(0.75)-x.quantile(0.25)).mean()
+    erhoehungen  = (df_90["delta"] > 0.001).sum()
+    senkungen    = (df_90["delta"] < -0.001).sum()
+    ratio        = erhoehungen / senkungen if senkungen > 0 else 0
+    aend_tag     = df_90.groupby("tag")["delta"].count().mean()
+    kern_90      = df_90[df_90["stunde_h"].between(13, 20)]
+    iqr_kern     = kern_90.groupby("tag")["preis"].agg(
+        lambda x: x.quantile(0.75)-x.quantile(0.25)).mean()
     volatilitaet = df_90.groupby("tag")["preis"].std().mean()
 
     st.markdown(f"""
@@ -558,32 +655,38 @@ with tab2:
 
     # Tagesweise Aggregation
     df_tag = df_90.groupby("tag").agg(
-        n_aenderungen = ("delta", "count"),
-        n_erhoehungen = ("delta", lambda x: (x > 0.001).sum()),
-        n_senkungen   = ("delta", lambda x: (x < -0.001).sum()),
+        n_aenderungen=("delta", "count"),
+        n_erhoehungen=("delta", lambda x: (x > 0.001).sum()),
+        n_senkungen  =("delta", lambda x: (x < -0.001).sum()),
     ).reset_index()
-    df_tag["tag"]        = pd.to_datetime(df_tag["tag"])
-    df_tag["roll7_aend"] = df_tag["n_aenderungen"].rolling(7, min_periods=1).mean()
-    df_tag["roll7_erh"]  = df_tag["n_erhoehungen"].rolling(7, min_periods=1).mean()
-    df_tag["roll7_sen"]  = df_tag["n_senkungen"].rolling(7, min_periods=1).mean()
-    df_tag["ratio_es"]   = df_tag["n_erhoehungen"] / df_tag["n_senkungen"].replace(0, np.nan)
-    df_tag["roll7_ratio"]= df_tag["ratio_es"].rolling(7, min_periods=1).mean()
+    df_tag["tag"]         = pd.to_datetime(df_tag["tag"])
+    df_tag["roll7_aend"]  = df_tag["n_aenderungen"].rolling(7, min_periods=1).mean()
+    df_tag["roll7_erh"]   = df_tag["n_erhoehungen"].rolling(7, min_periods=1).mean()
+    df_tag["roll7_sen"]   = df_tag["n_senkungen"].rolling(7, min_periods=1).mean()
+    df_tag["ratio_es"]    = df_tag["n_erhoehungen"] / df_tag["n_senkungen"].replace(0, np.nan)
+    df_tag["roll7_ratio"] = df_tag["ratio_es"].rolling(7, min_periods=1).mean()
 
-    # Liniendiagramm: Änderungen/Tag geglättet
-    st.markdown('<div class="section-label">Änderungen pro Tag (7-Tage-Glättung)</div>', unsafe_allow_html=True)
+    def chart_layout(height=220):
+        return dict(plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+                    height=height, margin=dict(l=10, r=10, t=10, b=10),
+                    legend=dict(orientation="h", y=-0.35, font=dict(size=12)),
+                    xaxis=dict(gridcolor="#F5F5F5"),
+                    yaxis=dict(gridcolor="#F5F5F5", zeroline=False))
+
+    # Änderungen/Tag
+    st.markdown('<div class="section-label">Änderungen pro Tag (7-Tage-Glättung)</div>',
+                unsafe_allow_html=True)
     fig2 = go.Figure()
     fig2.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["n_aenderungen"],
         mode="lines", name="Roh", line=dict(color="#E0E0E0", width=1)))
     fig2.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["roll7_aend"],
         mode="lines", name="Geglättet (7T)", line=dict(color="#1565C0", width=2.5)))
-    fig2.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF", height=220,
-        margin=dict(l=10,r=10,t=10,b=10), showlegend=True,
-        legend=dict(orientation="h", y=-0.3, font=dict(size=12)),
-        xaxis=dict(gridcolor="#F5F5F5"), yaxis=dict(gridcolor="#F5F5F5", zeroline=False))
+    fig2.update_layout(**chart_layout())
     st.plotly_chart(fig2, use_container_width=True)
 
-    # Erhöhungen/Senkungen pro Tag + Ratio
-    st.markdown('<div class="section-label">Erhöhungen · Senkungen · Ratio E/S (7-Tage-Glättung)</div>', unsafe_allow_html=True)
+    # Erhöhungen/Senkungen + Ratio
+    st.markdown('<div class="section-label">Erhöhungen · Senkungen · Ratio E/S (7-Tage-Glättung)</div>',
+                unsafe_allow_html=True)
     fig3 = go.Figure()
     fig3.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["roll7_erh"],
         mode="lines", name="Erhöhungen", line=dict(color="#C62828", width=2)))
@@ -592,23 +695,19 @@ with tab2:
     fig3.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["roll7_ratio"],
         mode="lines", name="Ratio E/S", line=dict(color="#1565C0", width=2, dash="dot"),
         yaxis="y2"))
-    fig3.update_layout(
-        plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF", height=240,
-        margin=dict(l=10,r=50,t=10,b=10),
-        legend=dict(orientation="h", y=-0.3, font=dict(size=12)),
-        xaxis=dict(gridcolor="#F5F5F5"),
+    fig3.update_layout(**chart_layout(240),
         yaxis=dict(gridcolor="#F5F5F5", zeroline=False, title="Anzahl"),
         yaxis2=dict(overlaying="y", side="right", zeroline=False,
-                    title="Ratio", showgrid=False),
-    )
+                    title="Ratio", showgrid=False))
     st.plotly_chart(fig3, use_container_width=True)
 
     # IQR Kernzeit
-    st.markdown('<div class="section-label">IQR Kernzeit 13–20h (Intraday-Volatilität)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">IQR Kernzeit 13–20h (Intraday-Volatilität)</div>',
+                unsafe_allow_html=True)
     df_iqr = kern_90.groupby("tag")["preis"].agg(
-        lambda x: x.quantile(0.75) - x.quantile(0.25)).reset_index()
-    df_iqr["tag"]    = pd.to_datetime(df_iqr["tag"])
-    df_iqr["roll7"]  = df_iqr["preis"].rolling(7, min_periods=1).mean()
+        lambda x: x.quantile(0.75)-x.quantile(0.25)).reset_index()
+    df_iqr["tag"]   = pd.to_datetime(df_iqr["tag"])
+    df_iqr["roll7"] = df_iqr["preis"].rolling(7, min_periods=1).mean()
     fig4 = go.Figure()
     fig4.add_trace(go.Scatter(x=df_iqr["tag"], y=df_iqr["preis"]*100,
         mode="lines", name="IQR täglich", line=dict(color="#E0E0E0", width=1)))
@@ -618,15 +717,13 @@ with tab2:
     fig4.add_hline(y=df_iqr["preis"].mean()*100, line_dash="dash",
                    line_color="#9E9E9E", line_width=1,
                    annotation_text=f"Ø {df_iqr['preis'].mean()*100:.1f} ct")
-    fig4.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF", height=220,
-        margin=dict(l=10,r=10,t=10,b=10),
-        legend=dict(orientation="h", y=-0.3, font=dict(size=12)),
-        xaxis=dict(gridcolor="#F5F5F5"),
+    fig4.update_layout(**chart_layout(),
         yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct"))
     st.plotly_chart(fig4, use_container_width=True)
 
     # Volatilität
-    st.markdown('<div class="section-label">Tägliche Preisvolatilität (Std. Abw.)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">Tägliche Preisvolatilität (Standardabweichung)</div>',
+                unsafe_allow_html=True)
     df_vol = df_90.groupby("tag")["preis"].std().reset_index()
     df_vol["tag"]   = pd.to_datetime(df_vol["tag"])
     df_vol["roll7"] = df_vol["preis"].rolling(7, min_periods=1).mean()
@@ -636,81 +733,158 @@ with tab2:
     fig5.add_trace(go.Scatter(x=df_vol["tag"], y=df_vol["roll7"]*100,
         mode="lines", name="Geglättet (7T)", line=dict(color="#E65100", width=2.5),
         fill="tozeroy", fillcolor="rgba(230,81,0,0.08)"))
-    fig5.update_layout(plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF", height=220,
-        margin=dict(l=10,r=10,t=10,b=10),
-        legend=dict(orientation="h", y=-0.3, font=dict(size=12)),
-        xaxis=dict(gridcolor="#F5F5F5"),
+    fig5.update_layout(**chart_layout(),
         yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct"))
     st.plotly_chart(fig5, use_container_width=True)
 
 # ─── TAB 3: Modell-Performance ───────────────────────────────────────────────
 with tab3:
-    st.markdown('<div class="section-label">Retrograde Bewertung — Tages-Prognose</div>', unsafe_allow_html=True)
-    st.caption("""**Zielvariable:** Gleitender 3-Tage-Kernpreis in 2 Tagen minus heute (roll=3, shift=2).
-Kernpreis = p10 der Stundenbins 13–20 Uhr. Prognose täglich 09:00 Uhr via GitHub Actions.""")
+    st.markdown('<div class="section-label">Retrograde Bewertung — Tages-Prognose</div>',
+                unsafe_allow_html=True)
+    st.caption("""**Zielvariable:** Δ gleitender 3-Tage-Kernpreis, Horizont 2 Tage.
+Das Modell prognostiziert täglich: steigt oder fällt der Kernpreis in 2 Tagen?
+Kernpreis = p10 der Stundenbins 13–20 Uhr.
+**MAE** (Mean Absolute Error) = durchschnittliche Abweichung zwischen vorhergesagtem und tatsächlichem Delta in Cent.""")
 
     if df_prog_log.empty:
         st.info("Noch keine Log-Daten verfügbar.")
     else:
-        df_log_30 = df_prog_log.tail(30).copy()
-        n_tage       = len(df_log_30)
-        n_korrekt    = int(df_log_30["richtung_korrekt"].sum())
-        acc_30       = df_log_30["richtung_korrekt"].mean() * 100
-        mae_30       = df_log_30["actual_delta"].sub(df_log_30["predicted_delta"]).abs().mean() * 100
+        # Letzte 30 Tage
+        df_log_30 = df_prog_log[
+            df_prog_log["datum"] >= (pd.Timestamp(jetzt_ts.date()) - pd.Timedelta(days=30))
+        ].copy()
+
+        n_tage    = len(df_log_30)
+        n_korrekt = int(df_log_30["richtung_korrekt"].sum())
+        acc_30    = df_log_30["richtung_korrekt"].mean() * 100 if n_tage > 0 else 0
+        mae_30    = df_log_30["actual_delta"].sub(
+            df_log_30["predicted_delta"]).abs().mean() * 100 if n_tage > 0 else 0
 
         st.markdown(f"""
         <div class="kpi-grid">
-            <div class="kpi-card"><div class="kpi-val">{acc_30:.1f}<span style="font-size:0.75rem">%</span></div><div class="kpi-lbl">Richtungs-Acc.</div></div>
-            <div class="kpi-card"><div class="kpi-val">{n_korrekt}/{n_tage}</div><div class="kpi-lbl">Korrekt / Tage</div></div>
-            <div class="kpi-card"><div class="kpi-val">{mae_30:.2f}<span style="font-size:0.75rem"> ct</span></div><div class="kpi-lbl">MAE</div></div>
-            <div class="kpi-card"><div class="kpi-val">67.9<span style="font-size:0.75rem">%</span></div><div class="kpi-lbl">Acc. Test-Set</div></div>
+            <div class="kpi-card">
+                <div class="kpi-val">{acc_30:.1f}<span style="font-size:0.75rem">%</span></div>
+                <div class="kpi-lbl">Richtungs-Acc.</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-val">{n_korrekt}/{n_tage}</div>
+                <div class="kpi-lbl">Korrekt / Tage</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-val">{mae_30:.2f}<span style="font-size:0.75rem"> ct</span></div>
+                <div class="kpi-lbl">MAE (Ø Abweichung)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-val">67.9<span style="font-size:0.75rem">%</span></div>
+                <div class="kpi-lbl">Acc. Test-Set</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Tages-Kacheln
-        st.markdown('<div class="section-label">Prognose-Trefferquote — letzte 30 Tage</div>', unsafe_allow_html=True)
-        st.caption("Grün = Richtung korrekt · Rot = Richtung falsch · Zielvariable: Δ Kernpreis roll3 +2 Tage")
+        # Kalender-Layout: volle 4 Wochen + laufende Woche, beginnt Montag
+        st.markdown('<div class="section-label">Prognose-Trefferquote — letzte 4 Wochen</div>',
+                    unsafe_allow_html=True)
+        st.caption("Grün ✓ = Richtung korrekt · Rot ✗ = Richtung falsch · Zahl = tatsächliches Δ Kernpreis (ct)")
 
-        kacheln_html = '<div class="tag-grid">'
-        for _, row in df_log_30.iterrows():
-            korrekt_cls = "korrekt" if row["richtung_korrekt"] == 1 else "falsch"
-            symbol      = "✓" if row["richtung_korrekt"] == 1 else "✗"
-            datum_str   = pd.to_datetime(row["datum"]).strftime("%d.%m")
-            delta_str   = f"{row['actual_delta']*100:+.1f}ct"
-            kacheln_html += f"""
-            <div class="tag-kachel {korrekt_cls}">
-                <span class="datum">{datum_str}</span>
-                <span class="symbol">{symbol}</span>
-                <span class="datum">{delta_str}</span>
-            </div>"""
-        kacheln_html += "</div>"
-        st.markdown(kacheln_html, unsafe_allow_html=True)
+        # Startdatum: letzter Montag vor 4 Wochen
+        heute = jetzt_ts.date()
+        wochentag_heute = heute.weekday()  # 0=Mo
+        start_laufende  = heute - timedelta(days=wochentag_heute)
+        start_kalender  = start_laufende - timedelta(weeks=4)
 
-        # Predicted vs. Actual Linie
-        st.markdown('<div class="section-label">Predicted vs. Actual Delta (Cent)</div>', unsafe_allow_html=True)
-        fig6 = go.Figure()
-        fig6.add_trace(go.Scatter(
-            x=df_log_30["datum"], y=df_log_30["predicted_delta"]*100,
-            mode="lines+markers", name="Predicted",
-            line=dict(color="#1565C0", width=2),
-            marker=dict(size=5),
-        ))
-        fig6.add_trace(go.Scatter(
-            x=df_log_30["datum"], y=df_log_30["actual_delta"]*100,
-            mode="lines+markers", name="Actual",
-            line=dict(color="#E65100", width=2),
-            marker=dict(size=5),
-        ))
-        fig6.add_hline(y=0, line_dash="dash", line_color="#E0E0E0", line_width=1)
-        fig6.update_layout(
-            plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF", height=280,
-            margin=dict(l=10,r=10,t=10,b=10),
-            legend=dict(orientation="h", y=-0.25, font=dict(size=12)),
-            xaxis=dict(gridcolor="#F5F5F5", tickformat="%d.%m."),
-            yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct"),
-            hovermode="x unified",
-        )
-        st.plotly_chart(fig6, use_container_width=True)
+        # Index aller Tage im Kalender
+        alle_tage = [start_kalender + timedelta(days=i)
+                     for i in range((heute - start_kalender).days + 1)]
+
+        # Lookup dict
+        log_dict = {}
+        for _, row in df_prog_log.iterrows():
+            log_dict[row["datum"].date()] = row
+
+        wt_labels_header = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+        # Header
+        header_html = '<div class="kalender-woche">' + \
+            "".join(f'<div class="kalender-header">{w}</div>' for w in wt_labels_header) + \
+            "</div>"
+        st.markdown(header_html, unsafe_allow_html=True)
+
+        # Wochen
+        wochen = []
+        woche_aktuell = []
+        for tag in alle_tage:
+            woche_aktuell.append(tag)
+            if tag.weekday() == 6:  # Sonntag
+                wochen.append(woche_aktuell)
+                woche_aktuell = []
+        if woche_aktuell:
+            wochen.append(woche_aktuell)
+
+        for woche in wochen:
+            # Auffüllen auf 7 Tage
+            erster_wt = woche[0].weekday()
+            letzter_wt = woche[-1].weekday()
+            woche_html = '<div class="kalender-woche">'
+            # Leere Zellen am Anfang
+            for _ in range(erster_wt):
+                woche_html += '<div class="tag-kachel leer"></div>'
+            for tag in woche:
+                if tag in log_dict:
+                    row    = log_dict[tag]
+                    korr   = int(row["richtung_korrekt"])
+                    symbol = "✓" if korr == 1 else "✗"
+                    cls    = "korrekt" if korr == 1 else "falsch"
+                    delta  = f"{row['actual_delta']*100:+.1f}ct"
+                    datum  = tag.strftime("%d.%m")
+                    woche_html += f"""<div class="tag-kachel {cls}">
+                        <span class="tag-datum">{datum}</span>
+                        <span class="tag-symbol">{symbol}</span>
+                        <span class="tag-delta">{delta}</span>
+                    </div>"""
+                elif tag <= heute:
+                    # Vergangener Tag ohne Daten
+                    woche_html += f"""<div class="tag-kachel leer">
+                        <span class="tag-datum">{tag.strftime('%d.%m')}</span>
+                    </div>"""
+                else:
+                    # Zukunft
+                    woche_html += '<div class="tag-kachel leer"></div>'
+            # Leere Zellen am Ende
+            for _ in range(6 - letzter_wt):
+                woche_html += '<div class="tag-kachel leer"></div>'
+            woche_html += "</div>"
+            st.markdown(woche_html, unsafe_allow_html=True)
+
+        # Predicted vs. Actual — letzte 30 Tage
+        st.markdown('<div class="section-label">Predicted vs. Actual Delta — letzte 30 Tage (Cent)</div>',
+                    unsafe_allow_html=True)
+        if n_tage > 0:
+            fig6 = go.Figure()
+            fig6.add_trace(go.Scatter(
+                x=df_log_30["datum"], y=df_log_30["predicted_delta"]*100,
+                mode="lines+markers", name="Predicted",
+                line=dict(color="#1565C0", width=2),
+                marker=dict(size=5),
+            ))
+            fig6.add_trace(go.Scatter(
+                x=df_log_30["datum"], y=df_log_30["actual_delta"]*100,
+                mode="lines+markers", name="Actual",
+                line=dict(color="#E65100", width=2),
+                marker=dict(size=5),
+            ))
+            fig6.add_hline(y=0, line_dash="dash", line_color="#E0E0E0", line_width=1)
+            fig6.update_layout(
+                plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF", height=280,
+                margin=dict(l=10, r=10, t=10, b=10),
+                legend=dict(orientation="h", y=-0.25, font=dict(size=12)),
+                xaxis=dict(gridcolor="#F5F5F5", tickformat="%d.%m."),
+                yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct",
+                           title="Δ Kernpreis roll3 (Cent)"),
+                hovermode="x unified",
+            )
+            st.plotly_chart(fig6, use_container_width=True)
+        else:
+            st.info("Noch nicht genug Daten für diesen Chart.")
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown(f"""
@@ -718,10 +892,11 @@ st.markdown(f"""
     Preisinformationen: <a href="https://tankerkoenig.de" target="_blank">Tankerkönig</a>
     · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>
     · Quelle: MTS-K (Markttransparenzstelle für Kraftstoffe)<br>
-    Modell: Random Forest Regressor · Zielvariable: Δ Kernpreis roll3, Horizont 2 Tage
-    · Richtungs-Accuracy Test-Set: 67.9% · Baseline: 38.6%<br>
+    Modell: Random Forest Regressor (scikit-learn)
+    · Zielvariable: Δ gleitender 3-Tage-Kernpreis, Horizont 2 Tage
+    · Richtungs-Accuracy Test-Set: 67.9% · Baseline: 38.6% · Trainingsperiode: 2019–2023<br>
     Prognose täglich 09:00 Uhr via GitHub Actions
     · <a href="https://github.com/felixschrader/spritpreisprognose" target="_blank">GitHub</a>
-    · DSI Capstone 2026
+    · DSI Capstone 2026 · Felix Schrader, Girandoux Fandio Nganwajop, Ghislain Wamo
 </div>
 """, unsafe_allow_html=True)
