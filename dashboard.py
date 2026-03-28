@@ -270,21 +270,21 @@ def lade_prognose_log():
         return pd.DataFrame(columns=["datum", "predicted_delta", "actual_delta", "richtung_korrekt"])
 
 @st.cache_data(ttl=3600)
-def generiere_empfehlung(preis, mean_24h, richtung_tage, empfehlung_tage, brent_delta, residuum):
+def generiere_empfehlung(preis, mean_24h, richtung_tage, brent_delta, residuum):
     prompt = f"""Du bist ein nüchterner Datenanalyst. Schreibe genau 2 Sätze auf Deutsch.
 
 Daten:
-- Aktueller Preis: {preis:.3f} € ({preis - mean_24h:+.3f} € vs. 24h-Schnitt)
-- Tages-Modell (Horizont 2 Tage): Richtung {richtung_tage} → {empfehlung_tage}
-- Brent-Delta: {brent_delta:+.2f} €/Barrel
+- Aktueller Preis: {preis:.3f} € ({preis - mean_24h:+.3f} € vs. 24h-Median)
+- Tages-Modell (Horizont 2 Tage): Richtung {richtung_tage}
+- Brent-Delta (2 Tage): {brent_delta:+.2f} €/Barrel
 - ARAL vs. NRW-Markt: {residuum:+.1f} Cent
 
 Regeln:
-- Satz 1 fett (**...**): präzise Handlungsempfehlung, max. 15 Wörter
-- Satz 2: Begründung mit 2 konkreten Datenpunkten aus den Daten oben
-- Kein Werbesprech, keine Floskeln, keine Konjunktive
-- Keine absoluten Eurobeträge für zukünftige Preise
-- Maximal 45 Wörter gesamt"""
+- Keine Handlungsempfehlung, kein "tanken", kein "warten"
+- Beschreibe nur was die Daten zeigen
+- Satz 1: aktuelle Preislage in 1 Satz mit Zahlen
+- Satz 2: was das Modell + Brent signalisieren
+- Maximal 40 Wörter gesamt, kein Konjunktiv"""
 
     r = requests.post(
         "https://api.anthropic.com/v1/messages",
@@ -293,7 +293,7 @@ Regeln:
             "x-api-key": st.secrets["ANTHROPIC_API_KEY"],
             "anthropic-version": "2023-06-01",
         },
-        json={"model": "claude-haiku-4-5-20251001", "max_tokens": 120,
+        json={"model": "claude-haiku-4-5-20251001", "max_tokens": 100,
               "messages": [{"role": "user", "content": prompt}]},
         timeout=10
     )
@@ -319,50 +319,41 @@ def ist_offen(stunde_h, wochentag):
 def baue_prognose_linie(jetzt_ts, letzter_preis, kern_preis, pred_delta_cent,
                         stunden_mittel_dict, stunden_std_dict):
     """
-    Baut die Prognose-Linie bis Mitternacht übermorgen.
-    Methode:
-    - Basis: rolling 28-Tage Stundenmittelwert + Offset (Verankerung am aktuellen Preis)
-    - Kernpreis (13-20h) wird um pred_delta_cent verschoben (Modell-Signal)
-    - Morning-Spike (06h) wird aus historischem Abstand p10→06h berechnet
-    - Geschlossene Stunden werden nicht angezeigt
+    Prognose-Linie bis Mitternacht übermorgen.
+    Basis: historisches Tagesprofil (28T-Mittel) skaliert auf aktuelles Niveau.
+    Kernpreis (13-20h) bekommt linearen Shift aus Modell-Prognose.
+    Geschlossene Stunden werden ausgelassen.
     """
-    # Offset: aktueller Preis verankert die Linie
-    basis_h = stunden_mittel_dict.get(jetzt_ts.hour, letzter_preis)
-    offset  = letzter_preis - basis_h
+    # Skalierungsfaktor: aktueller Kernpreis / historischer Kernpreis-Mittelwert
+    hist_kern_mean = np.mean([stunden_mittel_dict.get(h, kern_preis)
+                              for h in range(13, 21)])
+    if hist_kern_mean > 0 and kern_preis > 0:
+        skala = kern_preis / hist_kern_mean
+    else:
+        skala = 1.0
 
-    # Kernpreis-Shift: Modell sagt +X Cent in 2 Tagen
-    # Wir verteilen den Shift linear über die Kernzeit-Stunden
-    kern_shift_pro_stunde = pred_delta_cent / 100 / len(range(13, 21))
-
-    # Endpunkt: Mitternacht übermorgen
     uebermorgen = (jetzt_ts + timedelta(days=2)).normalize()
-
     punkte = []
     ts = jetzt_ts.floor("h") + timedelta(hours=1)
 
     while ts <= uebermorgen:
         wochentag = ts.dayofweek
         stunde_h  = ts.hour
-
         if not ist_offen(stunde_h, wochentag):
             ts += timedelta(hours=1)
             continue
 
-        hist_basis = stunden_mittel_dict.get(stunde_h, letzter_preis) + offset
+        # Historisches Profil skaliert auf aktuelles Niveau
+        hist_h = stunden_mittel_dict.get(stunde_h, kern_preis) * skala
 
-        # Tage seit jetzt (für lineare Interpolation des Kernpreis-Shifts)
+        # Kernzeit: linearer Shift über 2 Tage
         tage_seit_jetzt = (ts - jetzt_ts).total_seconds() / 86400
-
-        # Kernzeit-Stunden bekommen den Modell-Shift (linear interpoliert)
         if 13 <= stunde_h < 21:
             shift = pred_delta_cent / 100 * min(tage_seit_jetzt / 2.0, 1.0)
         else:
             shift = 0.0
 
-        punkte.append({
-            "stunde": ts,
-            "preis":  round(hist_basis + shift, 4),
-        })
+        punkte.append({"stunde": ts, "preis": round(hist_h + shift, 4)})
         ts += timedelta(hours=1)
 
     return pd.DataFrame(punkte)
@@ -449,11 +440,11 @@ mean_24h = float(df_24h_raw.groupby("stunde_bin")["preis"].median().median())
 try:
     ki_text = generiere_empfehlung(
         letzter_preis, mean_24h,
-        richtung_tage, empfehlung_tage,
+        richtung_tage,
         brent_delta2, residuum_cent
     )
 except:
-    ki_text = f"**{empfehlung_tage.capitalize()}.** {tages.get('begruendung', '')}"
+    ki_text = tages.get("begruendung", "Keine Prognose verfügbar.")
 
 # Empfehlungs-Klasse
 if "heute" in empfehlung_tage:
@@ -490,8 +481,8 @@ if st.button("↺ Aktualisieren", key="refresh"):
 
 # ── METRIKEN ──────────────────────────────────────────────────────────────────
 delta_val   = letzter_preis - mean_24h
-delta_cls   = "delta-green" if delta_val < 0 else "delta-red"
-delta_arrow = "↓" if delta_val < 0 else "↑"
+delta_cls  = "delta-green" if delta_val < 0 else "delta-red"
+delta_sign = "−" if delta_val < 0 else "+"
 
 if richtung_tage == "fällt":
     tend_pfeil, tend_cls = "↓", "tendenz-down"
@@ -512,7 +503,7 @@ st.markdown(f"""
     <div class="card">
         <div class="card-title">Aktueller Preis · {uhrzeit} Uhr</div>
         <div class="card-value">{preis_fmt(letzter_preis)} &euro;</div>
-        <div class="card-delta {delta_cls}">{delta_arrow} {abs(delta_val):.2f} &euro; vs. &Oslash; 24h</div>
+        <div class="card-delta {delta_cls}">{delta_sign} {abs(delta_val):.2f} &euro; vs. Median 24h</div>
     </div>
     <div class="card">
         <div class="card-title">Tages-Prognose · übermorgen</div>
@@ -523,10 +514,17 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ── EMPFEHLUNG ────────────────────────────────────────────────────────────────
+# Farbe der Empfehlung-Card basiert auf Richtung, nicht Empfehlung
+if richtung_tage == "fällt":
+    emp_border = "#2E7D32"
+elif richtung_tage == "steigt":
+    emp_border = "#C62828"
+else:
+    emp_border = "#1565C0"
+
 st.markdown(f"""
-<div class="empfehlung-card {card_cls}">
-    <div class="empfehlung-badge {badge_cls}">{badge_txt}</div>
-    <div class="empfehlung-text">{bold(ki_text)}</div>
+<div class="empfehlung-card" style="border-left-color: {emp_border}">
+    <div class="empfehlung-text">{ki_text}</div>
     <div class="ki-footer">
         KI-generiert · <a href="https://www.anthropic.com" target="_blank">Claude API · Anthropic</a>
         · Keine Garantie
@@ -640,63 +638,48 @@ with tab2:
     kern_90      = df_90[df_90["stunde_h"].between(13, 20)]
     iqr_kern     = kern_90.groupby("tag")["preis"].agg(
         lambda x: x.quantile(0.75)-x.quantile(0.25)).mean()
-    volatilitaet = df_90.groupby("tag")["preis"].std().mean()
+    # Volatilität über ganzen Tag (inkl. Morning-Spike)
+    df_ext_90 = df_ext[df_ext["stunde"] >= cutoff_90d].copy()
+    df_ext_90["tag_v"] = df_ext_90["stunde"].dt.date
+    volatilitaet = df_ext_90.groupby("tag_v")["preis"].std().mean()
 
+    # 3x3 KPI-Cards
     st.markdown(f"""
-    <div class="kpi-grid">
-        <div class="kpi-card"><div class="kpi-val">{erhoehungen:,}</div><div class="kpi-lbl">Erhöhungen</div></div>
-        <div class="kpi-card"><div class="kpi-val">{senkungen:,}</div><div class="kpi-lbl">Senkungen</div></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;margin-bottom:1.25rem">
+        <div class="kpi-card"><div class="kpi-val">{erhoehungen:,}</div><div class="kpi-lbl">Erhöhungen (90T)</div></div>
+        <div class="kpi-card"><div class="kpi-val">{senkungen:,}</div><div class="kpi-lbl">Senkungen (90T)</div></div>
         <div class="kpi-card"><div class="kpi-val">{ratio:.2f}</div><div class="kpi-lbl">Ratio E/S</div></div>
         <div class="kpi-card"><div class="kpi-val">{aend_tag:.1f}</div><div class="kpi-lbl">Ø Ändg/Tag</div></div>
-        <div class="kpi-card"><div class="kpi-val">{iqr_kern*100:.1f}<span style="font-size:0.75rem"> ct</span></div><div class="kpi-lbl">IQR Kernzeit</div></div>
-        <div class="kpi-card"><div class="kpi-val">{volatilitaet*100:.1f}<span style="font-size:0.75rem"> ct</span></div><div class="kpi-lbl">Ø Volatilität</div></div>
+        <div class="kpi-card"><div class="kpi-val">{iqr_kern*100:.1f}<span style="font-size:0.75rem"> ct</span></div><div class="kpi-lbl">Ø IQR Kernzeit</div></div>
+        <div class="kpi-card"><div class="kpi-val">{volatilitaet*100:.1f}<span style="font-size:0.75rem"> ct</span></div><div class="kpi-lbl">Ø Volatilität/Tag</div></div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Tagesweise Aggregation
     df_tag = df_90.groupby("tag").agg(
         n_aenderungen=("delta", "count"),
         n_erhoehungen=("delta", lambda x: (x > 0.001).sum()),
         n_senkungen  =("delta", lambda x: (x < -0.001).sum()),
     ).reset_index()
-    df_tag["tag"]         = pd.to_datetime(df_tag["tag"])
-    df_tag["roll7_aend"]  = df_tag["n_aenderungen"].rolling(7, min_periods=1).mean()
-    df_tag["roll7_erh"]   = df_tag["n_erhoehungen"].rolling(7, min_periods=1).mean()
-    df_tag["roll7_sen"]   = df_tag["n_senkungen"].rolling(7, min_periods=1).mean()
-    df_tag["ratio_es"]    = df_tag["n_erhoehungen"] / df_tag["n_senkungen"].replace(0, np.nan)
-    df_tag["roll7_ratio"] = df_tag["ratio_es"].rolling(7, min_periods=1).mean()
+    df_tag["tag"]      = pd.to_datetime(df_tag["tag"])
+    df_tag["ratio_es"] = df_tag["n_erhoehungen"] / df_tag["n_senkungen"].replace(0, np.nan)
 
-    BASE_LAYOUT = dict(
-        plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
-        margin=dict(l=10, r=10, t=10, b=10),
-        legend=dict(orientation="h", y=-0.35, font=dict(size=12)),
-        xaxis=dict(gridcolor="#F5F5F5"),
-    )
+    BASE_L = dict(plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+                  margin=dict(l=10, r=10, t=10, b=10),
+                  legend=dict(orientation="h", y=-0.35, font=dict(size=12)),
+                  xaxis=dict(gridcolor="#F5F5F5"))
 
-    # Änderungen/Tag
-    st.markdown('<div class="section-label">Änderungen pro Tag (7-Tage-Glättung)</div>',
+    # Erhöhungen/Senkungen/Ratio
+    st.markdown('<div class="section-label">Erhöhungen · Senkungen · Ratio E/S — täglich</div>',
                 unsafe_allow_html=True)
     fig2 = go.Figure()
-    fig2.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["n_aenderungen"],
-        mode="lines", name="Roh", line=dict(color="#E0E0E0", width=1)))
-    fig2.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["roll7_aend"],
-        mode="lines", name="Geglättet (7T)", line=dict(color="#1565C0", width=2.5)))
-    fig2.update_layout(**BASE_LAYOUT, height=220,
-        yaxis=dict(gridcolor="#F5F5F5", zeroline=False))
-    st.plotly_chart(fig2, use_container_width=True)
-
-    # Erhöhungen/Senkungen + Ratio
-    st.markdown('<div class="section-label">Erhöhungen · Senkungen · Ratio E/S (7-Tage-Glättung)</div>',
-                unsafe_allow_html=True)
-    fig3 = go.Figure()
-    fig3.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["roll7_erh"],
-        mode="lines", name="Erhöhungen", line=dict(color="#C62828", width=2)))
-    fig3.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["roll7_sen"],
-        mode="lines", name="Senkungen", line=dict(color="#2E7D32", width=2)))
-    fig3.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["roll7_ratio"],
-        mode="lines", name="Ratio E/S", line=dict(color="#1565C0", width=2, dash="dot"),
+    fig2.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["n_erhoehungen"],
+        mode="lines", name="Erhöhungen", line=dict(color="#C62828", width=1.5)))
+    fig2.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["n_senkungen"],
+        mode="lines", name="Senkungen", line=dict(color="#2E7D32", width=1.5)))
+    fig2.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["ratio_es"],
+        mode="lines", name="Ratio E/S", line=dict(color="#1565C0", width=1.5, dash="dot"),
         yaxis="y2"))
-    fig3.update_layout(
+    fig2.update_layout(
         plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF", height=240,
         margin=dict(l=10, r=50, t=10, b=10),
         legend=dict(orientation="h", y=-0.35, font=dict(size=12)),
@@ -705,57 +688,79 @@ with tab2:
         yaxis2=dict(overlaying="y", side="right", zeroline=False,
                     title="Ratio", showgrid=False),
     )
+    st.plotly_chart(fig2, use_container_width=True)
+
+    # Änderungen/Tag
+    st.markdown('<div class="section-label">Änderungen pro Tag — täglich</div>',
+                unsafe_allow_html=True)
+    fig3 = go.Figure()
+    fig3.add_trace(go.Scatter(x=df_tag["tag"], y=df_tag["n_aenderungen"],
+        mode="lines", name="Ändg/Tag", line=dict(color="#1565C0", width=1.5)))
+    fig3.update_layout(**BASE_L, height=200,
+        yaxis=dict(gridcolor="#F5F5F5", zeroline=False))
     st.plotly_chart(fig3, use_container_width=True)
 
-    # IQR Kernzeit
-    st.markdown('<div class="section-label">IQR Kernzeit 13–20h (Intraday-Volatilität)</div>',
+    # Morning-Spike vs. Closing
+    st.markdown('<div class="section-label">Morning-Spike (06h) vs. Closing (21h) — täglich</div>',
+                unsafe_allow_html=True)
+    df_all_90 = df_ext[df_ext["stunde"] >= cutoff_90d].copy()
+    df_all_90["stunde_h"] = df_all_90["stunde"].dt.hour
+    df_all_90["tag"]      = df_all_90["stunde"].dt.date
+    df_morning = df_all_90[df_all_90["stunde_h"] == 6].groupby("tag")["preis"].mean().reset_index()
+    df_closing = df_all_90[df_all_90["stunde_h"] == 21].groupby("tag")["preis"].mean().reset_index()
+    df_morning["tag"] = pd.to_datetime(df_morning["tag"])
+    df_closing["tag"] = pd.to_datetime(df_closing["tag"])
+    fig4 = go.Figure()
+    fig4.add_trace(go.Scatter(x=df_morning["tag"], y=df_morning["preis"],
+        mode="lines", name="06h (Morning-Spike)", line=dict(color="#E65100", width=1.5)))
+    fig4.add_trace(go.Scatter(x=df_closing["tag"], y=df_closing["preis"],
+        mode="lines", name="21h (Closing)", line=dict(color="#1565C0", width=1.5)))
+    fig4.update_layout(**BASE_L, height=220,
+        yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" €"))
+    st.plotly_chart(fig4, use_container_width=True)
+
+    # IQR Kernzeit (roh, keine Glättung)
+    st.markdown('<div class="section-label">IQR Kernzeit 13–20h — täglich</div>',
                 unsafe_allow_html=True)
     df_iqr = kern_90.groupby("tag")["preis"].agg(
         lambda x: x.quantile(0.75)-x.quantile(0.25)).reset_index()
-    df_iqr["tag"]   = pd.to_datetime(df_iqr["tag"])
-    df_iqr["roll7"] = df_iqr["preis"].rolling(7, min_periods=1).mean()
-    fig4 = go.Figure()
-    fig4.add_trace(go.Scatter(x=df_iqr["tag"], y=df_iqr["preis"]*100,
-        mode="lines", name="IQR täglich", line=dict(color="#E0E0E0", width=1)))
-    fig4.add_trace(go.Scatter(x=df_iqr["tag"], y=df_iqr["roll7"]*100,
-        mode="lines", name="Geglättet (7T)", line=dict(color="#6A1B9A", width=2.5),
-        fill="tozeroy", fillcolor="rgba(106,27,154,0.08)"))
-    fig4.update_layout(**BASE_LAYOUT, height=220,
-        yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct"))
-    st.plotly_chart(fig4, use_container_width=True)
-
-    # Volatilität
-    st.markdown('<div class="section-label">Tägliche Preisvolatilität (Standardabweichung)</div>',
-                unsafe_allow_html=True)
-    df_vol = df_90.groupby("tag")["preis"].std().reset_index()
-    df_vol["tag"]   = pd.to_datetime(df_vol["tag"])
-    df_vol["roll7"] = df_vol["preis"].rolling(7, min_periods=1).mean()
+    df_iqr["tag"] = pd.to_datetime(df_iqr["tag"])
     fig5 = go.Figure()
-    fig5.add_trace(go.Scatter(x=df_vol["tag"], y=df_vol["preis"]*100,
-        mode="lines", name="Volatilität täglich", line=dict(color="#E0E0E0", width=1)))
-    fig5.add_trace(go.Scatter(x=df_vol["tag"], y=df_vol["roll7"]*100,
-        mode="lines", name="Geglättet (7T)", line=dict(color="#E65100", width=2.5),
-        fill="tozeroy", fillcolor="rgba(230,81,0,0.08)"))
-    fig5.update_layout(**BASE_LAYOUT, height=220,
+    fig5.add_trace(go.Scatter(x=df_iqr["tag"], y=df_iqr["preis"]*100,
+        mode="lines", name="IQR Kernzeit",
+        line=dict(color="#6A1B9A", width=1.5),
+        fill="tozeroy", fillcolor="rgba(106,27,154,0.08)"))
+    fig5.update_layout(**BASE_L, height=200,
         yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct"))
     st.plotly_chart(fig5, use_container_width=True)
+
+    # Volatilität (ganzer Tag, inkl. Morning-Spike)
+    st.markdown('<div class="section-label">Tägliche Preisvolatilität — ganzer Tag (inkl. Morning-Spike)</div>',
+                unsafe_allow_html=True)
+    df_vol = df_ext_90.groupby("tag_v")["preis"].std().reset_index()
+    df_vol["tag_v"] = pd.to_datetime(df_vol["tag_v"])
+    fig6_kpi = go.Figure()
+    fig6_kpi.add_trace(go.Scatter(x=df_vol["tag_v"], y=df_vol["preis"]*100,
+        mode="lines", name="Volatilität",
+        line=dict(color="#E65100", width=1.5),
+        fill="tozeroy", fillcolor="rgba(230,81,0,0.08)"))
+    fig6_kpi.update_layout(**BASE_L, height=200,
+        yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct"))
+    st.plotly_chart(fig6_kpi, use_container_width=True)
 
 # ─── TAB 3: Modell-Performance ───────────────────────────────────────────────
 with tab3:
     st.markdown('<div class="section-label">Retrograde Bewertung — Tages-Prognose</div>',
                 unsafe_allow_html=True)
     st.caption("""**Zielvariable:** Δ gleitender 3-Tage-Kernpreis, Horizont 2 Tage.
-Das Modell prognostiziert täglich: steigt oder fällt der Kernpreis in 2 Tagen?
 Kernpreis = p10 der Stundenbins 13–20 Uhr.
-**MAE** (Mean Absolute Error) = durchschnittliche Abweichung zwischen vorhergesagtem und tatsächlichem Delta in Cent.""")
+**Richtung korrekt** = Predicted und Actual auf gleicher Seite der ±0.5ct Schwelle.
+**MAE** = durchschnittliche Abweichung Predicted vs. Actual in Cent.""")
 
     if df_prog_log.empty:
         st.info("Noch keine Log-Daten verfügbar.")
     else:
-        # Letzte 30 Tage
-        df_log_30 = df_prog_log[
-            df_prog_log["datum"] >= (pd.Timestamp(jetzt_ts.date()) - pd.Timedelta(days=30))
-        ].copy()
+        df_log_30 = df_prog_log.tail(30).copy()
 
         n_tage    = len(df_log_30)
         n_korrekt = int(df_log_30["richtung_korrekt"].sum())
@@ -767,7 +772,7 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
         <div class="kpi-grid">
             <div class="kpi-card">
                 <div class="kpi-val">{acc_30:.1f}<span style="font-size:0.75rem">%</span></div>
-                <div class="kpi-lbl">Richtungs-Acc.</div>
+                <div class="kpi-lbl">Richtungs-Acc. (30T)</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-val">{n_korrekt}/{n_tage}</div>
@@ -775,7 +780,7 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
             </div>
             <div class="kpi-card">
                 <div class="kpi-val">{mae_30:.2f}<span style="font-size:0.75rem"> ct</span></div>
-                <div class="kpi-lbl">MAE (Ø Abweichung)</div>
+                <div class="kpi-lbl">MAE (30T)</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-val">67.9<span style="font-size:0.75rem">%</span></div>
@@ -784,51 +789,37 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
         </div>
         """, unsafe_allow_html=True)
 
-        # Kalender-Layout: volle 4 Wochen + laufende Woche, beginnt Montag
+        # Kalender
         st.markdown('<div class="section-label">Prognose-Trefferquote — letzte 4 Wochen</div>',
                     unsafe_allow_html=True)
-        st.caption("Grün ✓ = Richtung korrekt · Rot ✗ = Richtung falsch · Zahl = tatsächliches Δ Kernpreis (ct)")
+        st.caption("Grün ✓ = Richtung korrekt · Rot ✗ = falsch · Zahl = tatsächliches Δ (ct) · Schwelle: ±0.5 ct")
 
-        # Startdatum: letzter Montag vor 4 Wochen
-        heute = jetzt_ts.date()
-        wochentag_heute = heute.weekday()  # 0=Mo
+        heute           = jetzt_ts.date()
+        wochentag_heute = heute.weekday()
         start_laufende  = heute - timedelta(days=wochentag_heute)
         start_kalender  = start_laufende - timedelta(weeks=4)
-
-        # Index aller Tage im Kalender
         alle_tage = [start_kalender + timedelta(days=i)
                      for i in range((heute - start_kalender).days + 1)]
+        log_dict = {row["datum"].date(): row for _, row in df_prog_log.iterrows()}
 
-        # Lookup dict
-        log_dict = {}
-        for _, row in df_prog_log.iterrows():
-            log_dict[row["datum"].date()] = row
-
-        wt_labels_header = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-
-        # Header
         header_html = '<div class="kalender-woche">' + \
-            "".join(f'<div class="kalender-header">{w}</div>' for w in wt_labels_header) + \
-            "</div>"
+            "".join(f'<div class="kalender-header">{w}</div>'
+                    for w in ["Mo","Di","Mi","Do","Fr","Sa","So"]) + "</div>"
         st.markdown(header_html, unsafe_allow_html=True)
 
-        # Wochen
-        wochen = []
-        woche_aktuell = []
+        wochen, woche_aktuell = [], []
         for tag in alle_tage:
             woche_aktuell.append(tag)
-            if tag.weekday() == 6:  # Sonntag
+            if tag.weekday() == 6:
                 wochen.append(woche_aktuell)
                 woche_aktuell = []
         if woche_aktuell:
             wochen.append(woche_aktuell)
 
         for woche in wochen:
-            # Auffüllen auf 7 Tage
-            erster_wt = woche[0].weekday()
+            erster_wt  = woche[0].weekday()
             letzter_wt = woche[-1].weekday()
             woche_html = '<div class="kalender-woche">'
-            # Leere Zellen am Anfang
             for _ in range(erster_wt):
                 woche_html += '<div class="tag-kachel leer"></div>'
             for tag in woche:
@@ -837,22 +828,19 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
                     korr   = int(row["richtung_korrekt"])
                     symbol = "✓" if korr == 1 else "✗"
                     cls    = "korrekt" if korr == 1 else "falsch"
-                    delta  = f"{row['actual_delta']*100:+.1f}ct"
+                    act_d  = f"{row['actual_delta']*100:+.1f}ct"
                     datum  = tag.strftime("%d.%m")
                     woche_html += f"""<div class="tag-kachel {cls}">
                         <span class="tag-datum">{datum}</span>
                         <span class="tag-symbol">{symbol}</span>
-                        <span class="tag-delta">{delta}</span>
+                        <span class="tag-delta">{act_d}</span>
                     </div>"""
                 elif tag <= heute:
-                    # Vergangener Tag ohne Daten
                     woche_html += f"""<div class="tag-kachel leer">
                         <span class="tag-datum">{tag.strftime('%d.%m')}</span>
                     </div>"""
                 else:
-                    # Zukunft
                     woche_html += '<div class="tag-kachel leer"></div>'
-            # Leere Zellen am Ende
             for _ in range(6 - letzter_wt):
                 woche_html += '<div class="tag-kachel leer"></div>'
             woche_html += "</div>"
@@ -862,32 +850,32 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
         st.markdown('<div class="section-label">Predicted vs. Actual Delta — letzte 30 Tage (Cent)</div>',
                     unsafe_allow_html=True)
         if n_tage > 0:
-            fig6 = go.Figure()
-            fig6.add_trace(go.Scatter(
+            fig_perf = go.Figure()
+            fig_perf.add_trace(go.Scatter(
                 x=df_log_30["datum"], y=df_log_30["predicted_delta"]*100,
                 mode="lines+markers", name="Predicted",
-                line=dict(color="#1565C0", width=2),
-                marker=dict(size=5),
+                line=dict(color="#1565C0", width=2), marker=dict(size=5),
             ))
-            fig6.add_trace(go.Scatter(
+            fig_perf.add_trace(go.Scatter(
                 x=df_log_30["datum"], y=df_log_30["actual_delta"]*100,
                 mode="lines+markers", name="Actual",
-                line=dict(color="#E65100", width=2),
-                marker=dict(size=5),
+                line=dict(color="#E65100", width=2), marker=dict(size=5),
             ))
-            fig6.add_hline(y=0, line_dash="dash", line_color="#E0E0E0", line_width=1)
-            fig6.update_layout(
-                plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF", height=280,
+            fig_perf.add_hrect(y0=-0.5, y1=0.5,
+                               fillcolor="#F5F5F5", opacity=0.6, line_width=0)
+            fig_perf.add_hline(y=0, line_dash="dash", line_color="#CCCCCC", line_width=1)
+            fig_perf.update_layout(
+                plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF", height=300,
                 margin=dict(l=10, r=10, t=10, b=10),
                 legend=dict(orientation="h", y=-0.25, font=dict(size=12)),
                 xaxis=dict(gridcolor="#F5F5F5", tickformat="%d.%m."),
-                yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct",
-                           title="Δ Kernpreis roll3 (Cent)"),
+                yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct"),
                 hovermode="x unified",
             )
-            st.plotly_chart(fig6, use_container_width=True)
+            st.plotly_chart(fig_perf, use_container_width=True)
+            st.caption("Grauer Bereich = ±0.5 ct Stabilitätsschwelle")
         else:
-            st.info("Noch nicht genug Daten für diesen Chart.")
+            st.info("Noch nicht genug Daten.")
 
 # ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown(f"""
@@ -897,7 +885,8 @@ st.markdown(f"""
     · Quelle: MTS-K (Markttransparenzstelle für Kraftstoffe)<br>
     Modell: Random Forest Regressor (scikit-learn)
     · Zielvariable: Δ gleitender 3-Tage-Kernpreis, Horizont 2 Tage
-    · Richtungs-Accuracy Test-Set: 67.9% · Baseline: 38.6% · Trainingsperiode: 2019–2023<br>
+    · Richtungs-Accuracy Test-Set: 67.9% · Baseline: 38.6%
+    · Schwelle "stabil": ±0.5 Cent · Trainingsperiode: 2019–2023<br>
     Prognose täglich 09:00 Uhr via GitHub Actions
     · <a href="https://github.com/felixschrader/spritpreisprognose" target="_blank">GitHub</a>
     · DSI Capstone 2026 · Felix Schrader, Girandoux Fandio Nganwajop, Ghislain Wamo
