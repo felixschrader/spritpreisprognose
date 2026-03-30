@@ -751,6 +751,17 @@ with tab1:
                 is_weekend = df_brent_plot["stunde"].dt.dayofweek >= 5
                 y_weekday = df_brent_plot["brent_eur"].where(~is_weekend)
                 y_weekend = df_brent_plot["brent_eur"].where(is_weekend)
+                bruecke_x, bruecke_y = [], []
+                for i in range(1, len(df_brent_plot)):
+                    ts_prev = df_brent_plot.loc[i - 1, "stunde"]
+                    ts_cur = df_brent_plot.loc[i, "stunde"]
+                    if (ts_cur - ts_prev) > pd.Timedelta(hours=3):
+                        bruecke_x.extend([ts_prev, ts_cur, None])
+                        bruecke_y.extend([
+                            float(df_brent_plot.loc[i - 1, "brent_eur"]),
+                            float(df_brent_plot.loc[i, "brent_eur"]),
+                            None
+                        ])
 
                 # Hauptlinie: Wochentage in Grün
                 fig.add_trace(go.Scatter(
@@ -770,6 +781,18 @@ with tab1:
                     connectgaps=False,
                     showlegend=False,
                 ))
+                # Lücken (v.a. Wochenende) als halbtransparente Brücke verbinden
+                if bruecke_x:
+                    fig.add_trace(go.Scatter(
+                        x=bruecke_x, y=bruecke_y,
+                        mode="lines", name="Brent (Gap-Brücke)",
+                        line=dict(color="#9E9E9E", width=1.1, dash="dash"),
+                        opacity=0.35,
+                        yaxis="y2",
+                        connectgaps=False,
+                        showlegend=False,
+                        hoverinfo="skip",
+                    ))
     # Aktuellen Bin bis zum rechten Rand "schließen" und dort auf den Live-Preis springen.
     df_bin_now = df_hist_bin[df_hist_bin["stunde"] <= aktueller_bin_start]
     if not df_bin_now.empty:
