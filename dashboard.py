@@ -70,13 +70,13 @@ def osm_standort_embed(
 .osm-leaflet-fs:fullscreen .osm-leaflet-inner {{ height:100vh !important; }}
 .osm-fs-btn {{
   position:absolute; z-index:1000; top:8px; right:8px;
-  padding:6px 12px; font-size:12px; font-weight:500; font-family:Roboto,sans-serif;
+  padding:8px 14px; font-size:14px; font-weight:600; font-family:Roboto,sans-serif;
   cursor:pointer; border:1px solid #BDBDBD; border-radius:6px;
   background:#FFFFFF; color:#424242; box-shadow:0 1px 4px rgba(0,0,0,0.12);
 }}
 .osm-fs-btn:hover {{ background:#F5F5F5; border-color:#9E9E9E; }}
 .osm-leaflet-inner {{ width:100%; height:100%; min-height:{height}px; }}
-.osm-osm-attribution {{ font-size:0.78rem; color:#757575; margin-top:6px; font-family:Roboto,sans-serif; line-height:1.4; }}
+.osm-osm-attribution {{ font-size:0.9rem; color:#5C6370; margin-top:8px; font-family:Roboto,sans-serif; line-height:1.45; }}
 </style>
 <div class="osm-leaflet-wrap">
   <div id="osm-leaflet-fs" class="osm-leaflet-fs">
@@ -172,9 +172,35 @@ html, body, [class*="css"], .stApp {
     background: var(--bg-page) !important;
     background-image: linear-gradient(180deg, #E8ECF3 0%, var(--bg-page) 48%, #E9EDF4 100%) !important;
     background-attachment: fixed !important;
-    color: var(--text-primary); font-size: 16px;
+    color: var(--text-primary);
+    font-size: 18px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+}
+
+/* Hauptinhalt: etwas größer & luftiger lesbar */
+[data-testid="stMain"] {
+    font-size: 1.05rem !important;
+    line-height: 1.65 !important;
+}
+[data-testid="stMain"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stMain"] [data-testid="stMarkdownContainer"] li {
+    font-size: 1.05rem !important;
+    line-height: 1.68 !important;
+}
+[data-testid="stMain"] [data-baseweb="select"] > div,
+[data-testid="stMain"] label {
+    font-size: 1rem !important;
+}
+[data-testid="stAlert"] {
+    font-size: 1.02rem !important;
+    line-height: 1.6 !important;
+}
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] p,
+[data-testid="stExpander"] li {
+    font-size: 1.02rem !important;
+    line-height: 1.65 !important;
 }
 
 #MainMenu, footer, header { visibility: hidden; }
@@ -189,8 +215,8 @@ html, body, [class*="css"], .stApp {
 [data-testid="stCaptionContainer"] p,
 [data-testid="stCaptionContainer"] {
     color: var(--text-secondary) !important;
-    font-size: 0.875rem !important;
-    line-height: 1.5 !important;
+    font-size: 1rem !important;
+    line-height: 1.58 !important;
 }
 
 /* TOPBAR */
@@ -207,17 +233,17 @@ html, body, [class*="css"], .stApp {
 .topbar-left { flex: 1; min-width: 0; }
 .topbar-title {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: clamp(1.65rem, 4vw, 2.15rem);
+    font-size: clamp(1.85rem, 4.2vw, 2.45rem);
     font-weight: 700;
     letter-spacing: -0.02em;
     color: #FFFFFF;
     line-height: 1.12;
 }
 .topbar-addr {
-    font-size: 1rem;
-    color: rgba(255,255,255,0.88);
+    font-size: 1.08rem;
+    color: rgba(255,255,255,0.9);
     margin-top: 8px;
-    line-height: 1.45;
+    line-height: 1.5;
 }
 .topbar-addr a {
     color: #FFFFFF;
@@ -239,14 +265,14 @@ html, body, [class*="css"], .stApp {
     display: flex; flex-direction: column; gap: 4px;
 }
 .topbar-hours-row {
-    font-size: 0.9rem; color: rgba(255,255,255,0.78);
+    font-size: 1rem; color: rgba(255,255,255,0.82);
     display: flex; gap: 0.65rem; align-items: baseline;
 }
 .topbar-hours-row b {
     color: rgba(255,255,255,0.95);
     font-weight: 600;
-    min-width: 58px;
-    font-size: 0.82rem;
+    min-width: 62px;
+    font-size: 0.92rem;
     letter-spacing: 0.02em;
 }
 .topbar-right {
@@ -255,7 +281,7 @@ html, body, [class*="css"], .stApp {
 }
 .topbar-time {
     font-family: 'Roboto Mono', ui-monospace, monospace;
-    font-size: 0.92rem; color: #FFFFFF;
+    font-size: 1.02rem; color: #FFFFFF;
     background: rgba(0,0,0,0.22);
     padding: 8px 14px;
     border-radius: 999px;
@@ -271,7 +297,7 @@ html, body, [class*="css"], .stApp {
     background: rgba(255,255,255,0.16);
     color: #FFFFFF !important;
     text-decoration: none !important;
-    font-size: 0.86rem;
+    font-size: 0.96rem;
     font-weight: 600;
     border: 1px solid rgba(255,255,255,0.22);
     transition: background 0.15s ease, transform 0.12s ease;
@@ -313,22 +339,22 @@ html, body, [class*="css"], .stApp {
     border-color: #D8DEE9;
 }
 .card-title {
-    font-size: 0.72rem; font-weight: 600;
-    letter-spacing: 0.1em; text-transform: uppercase;
+    font-size: 0.8rem; font-weight: 600;
+    letter-spacing: 0.09em; text-transform: uppercase;
     color: var(--text-secondary); margin-bottom: 0.55rem;
 }
 .card-value {
-    font-size: clamp(2rem, 3vw, 2.55rem);
+    font-size: clamp(2.15rem, 3.2vw, 2.85rem);
     font-weight: 300; color: var(--text-primary);
     line-height: 1.08; letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
 }
 .card-value sup { font-size: 0.42em; vertical-align: super; font-weight: 400; color: #8E959F; }
-.card-delta { font-size: 0.875rem; font-weight: 500; margin-top: 0.55rem; letter-spacing: 0.01em; }
+.card-delta { font-size: 1rem; font-weight: 500; margin-top: 0.55rem; letter-spacing: 0.01em; }
 .delta-green  { color: #2E7D32; }
 .delta-red    { color: #C62828; }
 .delta-blue   { color: #1565C0; }
-.tendenz-val  { font-size: clamp(2.2rem, 3.5vw, 3rem); font-weight: 300; line-height: 1; }
+.tendenz-val  { font-size: clamp(2.35rem, 3.6vw, 3.15rem); font-weight: 300; line-height: 1; }
 .tendenz-down { color: #2E7D32; }
 .tendenz-up   { color: #C62828; }
 .tendenz-flat { color: #757575; }
@@ -349,17 +375,17 @@ html, body, [class*="css"], .stApp {
 .empfehlung-card.morgen { border-left-color: #E65100; }
 .empfehlung-card.warten { border-left-color: #C62828; }
 .empfehlung-badge {
-    display: inline-block; font-size: 0.72rem; font-weight: 700;
+    display: inline-block; font-size: 0.8rem; font-weight: 700;
     letter-spacing: 0.1em; text-transform: uppercase;
     padding: 3px 10px; border-radius: 4px; margin-bottom: 0.8rem;
 }
 .badge-heute  { background: #E8F5E9; color: #1B5E20; }
 .badge-morgen { background: #FFF3E0; color: #BF360C; }
 .badge-warten { background: #FFEBEE; color: #B71C1C; }
-.empfehlung-text { font-size: 1.0625rem; color: var(--text-primary); line-height: 1.72; }
+.empfehlung-text { font-size: 1.125rem; color: var(--text-primary); line-height: 1.75; }
 .empfehlung-text strong { color: var(--text-primary); font-weight: 600; }
 .ki-footer {
-    font-size: 0.78rem; color: #8E959F;
+    font-size: 0.9rem; color: #8E959F;
     margin-top: 0.95rem; padding-top: 0.75rem;
     border-top: 1px solid #EEF1F4;
 }
@@ -381,7 +407,7 @@ html, body, [class*="css"], .stApp {
 .social-strip {
     display: flex; flex-wrap: wrap; align-items: center;
     gap: 0.45rem 0.9rem; margin: 0; padding: 0;
-    font-size: 0.86rem;
+    font-size: 0.96rem;
     flex: 1 1 auto; min-width: min(100%, 260px);
 }
 .social-strip a {
@@ -398,7 +424,7 @@ html, body, [class*="css"], .stApp {
 .social-strip-sep { color: #BDBDBD; user-select: none; }
 .header-details {
     flex: 0 0 auto; margin-left: auto;
-    font-size: 0.88rem; color: #424242; line-height: 1.65;
+    font-size: 0.98rem; color: #424242; line-height: 1.65;
     max-width: 100%;
 }
 .header-details[open] {
@@ -407,9 +433,9 @@ html, body, [class*="css"], .stApp {
 .header-details summary {
     cursor: pointer; list-style: none;
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 0.88rem; font-weight: 600;
+    font-size: 0.96rem; font-weight: 600;
     color: var(--brand-dark);
-    padding: 0.5rem 1rem;
+    padding: 0.55rem 1.1rem;
     border-radius: 999px;
     border: 1px solid #B8D4F0;
     background: linear-gradient(180deg, #F5FAFF 0%, #E3F0FC 100%);
@@ -429,12 +455,13 @@ html, body, [class*="css"], .stApp {
 }
 .header-details summary::-webkit-details-marker { display: none; }
 .header-details-body {
-    margin-top: 0.65rem; padding: 0.85rem 1.05rem;
+    margin-top: 0.65rem; padding: 0.9rem 1.1rem;
     background: #F8FAFC;
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
-    line-height: 1.65;
+    font-size: 1.02rem;
+    line-height: 1.68;
 }
 .header-details-body p { margin: 0 0 0.65rem 0; }
 .header-details-body p:last-child { margin-bottom: 0; }
@@ -442,7 +469,7 @@ html, body, [class*="css"], .stApp {
 /* OSM-Karte */
 .osm-map-title {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 0.9rem; font-weight: 600;
+    font-size: 1.02rem; font-weight: 600;
     color: var(--text-secondary);
     margin: 0.35rem 0 0.55rem 0;
     letter-spacing: 0.01em;
@@ -460,7 +487,7 @@ html, body, [class*="css"], .stApp {
 /* SECTION LABEL */
 .section-label {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 0.82rem; font-weight: 700;
+    font-size: 0.92rem; font-weight: 700;
     letter-spacing: 0.12em; text-transform: uppercase;
     color: var(--text-secondary);
     margin: 1.65rem 0 0.85rem 0;
@@ -489,11 +516,11 @@ html, body, [class*="css"], .stApp {
 }
 .kpi-val {
     font-family: 'Roboto Mono', ui-monospace, monospace;
-    font-size: 1.45rem; font-weight: 500; color: var(--text-primary);
+    font-size: 1.62rem; font-weight: 500; color: var(--text-primary);
     font-variant-numeric: tabular-nums;
 }
 .kpi-lbl {
-    font-size: 0.65rem; font-weight: 600;
+    font-size: 0.72rem; font-weight: 600;
     letter-spacing: 0.1em; text-transform: uppercase;
     color: #8E959F; margin-top: 6px; line-height: 1.3;
 }
@@ -507,7 +534,7 @@ html, body, [class*="css"], .stApp {
 }
 .kalender-header {
     text-align: center;
-    font-size: 0.68rem; font-weight: 700;
+    font-size: 0.76rem; font-weight: 700;
     letter-spacing: 0.06em; text-transform: uppercase;
     color: #9E9E9E; padding: 4px 0;
 }
@@ -515,15 +542,15 @@ html, body, [class*="css"], .stApp {
     border-radius: 6px;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    gap: 3px; padding: 8px 4px;
-    font-size: 0.78rem; font-weight: 500;
+    gap: 3px; padding: 9px 5px;
+    font-size: 0.86rem; font-weight: 500;
 }
 .tag-kachel.korrekt { background: #E8F5E9; color: #1B5E20; border: 1px solid #A5D6A7; }
 .tag-kachel.falsch  { background: #FFEBEE; color: #B71C1C; border: 1px solid #EF9A9A; }
 .tag-kachel.leer    { background: transparent; border: 1px solid #F0F0F0; }
 .tag-symbol { font-size: 1.1rem; }
-.tag-datum  { font-size: 0.75rem; font-weight: 600; }
-.tag-delta  { font-size: 0.75rem; }
+.tag-datum  { font-size: 0.82rem; font-weight: 600; }
+.tag-delta  { font-size: 0.8rem; }
 
 /* TABS — segmentiert, ruhig */
 .stTabs [data-baseweb="tab-list"] {
@@ -536,9 +563,9 @@ html, body, [class*="css"], .stApp {
 }
 .stTabs [data-baseweb="tab"] {
     font-family: 'Plus Jakarta Sans', sans-serif !important;
-    font-size: 0.92rem !important;
+    font-size: 1.02rem !important;
     font-weight: 600 !important;
-    padding: 0.55rem 1rem !important;
+    padding: 0.6rem 1.1rem !important;
     border-radius: 9px !important;
     color: var(--text-secondary) !important;
     border: none !important;
@@ -563,7 +590,7 @@ html, body, [class*="css"], .stApp {
     border-top: 1px solid var(--border-subtle);
 }
 .footer-mini {
-    font-size: 0.875rem; color: var(--text-secondary); line-height: 1.75;
+    font-size: 0.95rem; color: var(--text-secondary); line-height: 1.75;
 }
 .footer-mini a {
     color: #3D4450;
@@ -579,13 +606,13 @@ html, body, [class*="css"], .stApp {
     .kpi-grid    { grid-template-columns: repeat(2, 1fr); }
     .topbar      { flex-direction: column; padding: 1.1rem 1.15rem; border-radius: 10px; }
     .topbar-right { align-items: flex-start; }
-    .topbar-title { font-size: 1.55rem; }
+    .topbar-title { font-size: 1.7rem; }
     .kalender-woche { grid-template-columns: repeat(4, 1fr); }
     .social-row-line1 { flex-direction: column; align-items: stretch; }
     .header-details { margin-left: 0; width: 100%; }
     .header-details summary { width: 100%; box-sizing: border-box; }
     .block-container { padding-left: 0.85rem !important; padding-right: 0.85rem !important; }
-    .stTabs [data-baseweb="tab"] { font-size: 0.85rem !important; padding: 0.45rem 0.65rem !important; }
+    .stTabs [data-baseweb="tab"] { font-size: 0.92rem !important; padding: 0.5rem 0.75rem !important; }
 }
 </style>
 """, unsafe_allow_html=True)
