@@ -560,12 +560,24 @@ with tab1:
 
     # Tages-Mittelwert (Kalendertag). Für heute: bis "jetzt".
     # Darstellung nur innerhalb der Öffnungszeiten (keine "Nacht-Linie").
+    # Start/Ende werden an sichtbare 3h-Bins gekoppelt, damit nichts "verschoben" wirkt.
     df_hist_day = df_hist_all.copy()
     df_hist_day["tag"] = df_hist_day["stunde"].dt.normalize()
     if not df_hist_day.empty:
         heute_norm = jetzt_ts.normalize()
         df_past = df_hist_day[df_hist_day["tag"] < heute_norm]
         df_today2 = df_hist_day[(df_hist_day["tag"] == heute_norm) & (df_hist_day["stunde"] <= jetzt_ts)]
+        df_hist_bin_day = df_hist_bin.copy()
+        df_hist_bin_day["tag"] = df_hist_bin_day["stunde"].dt.normalize()
+        bin_bounds = (
+            df_hist_bin_day.groupby("tag")["stunde"]
+            .agg(first_bin="min", last_bin="max")
+            .reset_index()
+        )
+        bin_bounds_dict = {
+            row["tag"]: (row["first_bin"], row["last_bin"])
+            for _, row in bin_bounds.iterrows()
+        }
 
         df_day_med_parts = []
         if not df_past.empty:
@@ -580,24 +592,22 @@ with tab1:
         if df_day_med_parts:
             df_day_mean = pd.concat(df_day_med_parts, ignore_index=True).sort_values("tag")
 
-            def oeffnung_start_ende(tag_ts: pd.Timestamp):
+            def oeffnung_ende(tag_ts: pd.Timestamp):
                 wd = tag_ts.dayofweek
-                if wd == 5:   # Sa
-                    start_h = 7
-                elif wd == 6: # So
-                    start_h = 8
-                else:         # Mo–Fr
-                    start_h = 6
                 # Anzeige/Öffnung bis 22:00 (letzte Stunde 21:xx)
                 ende_h = 22
-                return tag_ts + pd.Timedelta(hours=start_h), tag_ts + pd.Timedelta(hours=ende_h)
+                return tag_ts + pd.Timedelta(hours=ende_h)
 
             # Baue horizontale Segmente pro Tag (open -> close) und trenne Tage mit None.
             x_seg, y_seg = [], []
             for _, row in df_day_mean.iterrows():
                 tag_ts = pd.Timestamp(row["tag"])
                 preis_tag = float(row["preis"])
-                start_ts, ende_ts = oeffnung_start_ende(tag_ts)
+                bounds = bin_bounds_dict.get(tag_ts)
+                if not bounds:
+                    continue
+                start_ts, last_bin_ts = bounds
+                ende_ts = min(last_bin_ts + pd.Timedelta(hours=3), oeffnung_ende(tag_ts))
 
                 # Für heute: Segment endet "jetzt" (falls mitten am Tag).
                 if tag_ts == heute_norm:
