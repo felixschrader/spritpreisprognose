@@ -89,6 +89,20 @@ html, body, [class*="css"], .stApp {
     padding: 6px 14px; border-radius: 4px;
     white-space: nowrap;
 }
+.topbar-refresh {
+    display: inline-block;
+    margin-top: 2px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.18);
+    color: #FFFFFF !important;
+    text-decoration: none !important;
+    font-size: 0.88rem;
+    font-weight: 500;
+}
+.topbar-refresh:hover {
+    background: rgba(255,255,255,0.28);
+}
 .stButton > button[kind="primary"] {
     background-color: #1565C0 !important;
     border: 1px solid #1565C0 !important;
@@ -445,7 +459,7 @@ preis_live  = lade_aktueller_preis()
 df_prog_log = lade_prognose_log()
 df_brent_csv = lade_brent_intraday_csv()
 df_brent = df_brent_csv
-brent_source = "CSV (Quelle: Yahoo Finance Futures BZ=F via GitHub Actions)"
+brent_source = "Yahoo Finance Futures (BZ=F)"
 df_brent_daily = lade_brent_daily()
 eur_usd_fx  = lade_eurusd()
 
@@ -577,16 +591,16 @@ st.markdown(f"""
     </div>
     <div class="topbar-right">
         <span class="topbar-time">Live · {uhrzeit} Uhr</span>
+        <a class="topbar-refresh" href="?refresh=1">↺ Aktualisieren</a>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# Refresh-Button als Streamlit-Button (kein JS-Link)
-_sp, _btn_col = st.columns([5, 1])
-with _btn_col:
-    if st.button("↺ Aktualisieren", key="refresh", type="primary", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
+# Refresh via Query-Parameter (Button sitzt im blauen Top-Block)
+if st.query_params.get("refresh") == "1":
+    st.cache_data.clear()
+    st.query_params.clear()
+    st.rerun()
 
 # ── METRIKEN ──────────────────────────────────────────────────────────────────
 delta_val   = letzter_preis - mean_ref
@@ -637,7 +651,7 @@ st.markdown(f"""
     <div class="empfehlung-text">{ki_text}</div>
     <div class="ki-footer">
         KI-generiert · <a href="https://www.anthropic.com" target="_blank">Claude API · Anthropic</a>
-        · Brent = Futures (BZ=F), nicht Spot · Datenquelle: CSV aus GitHub (Yahoo Finance Futures)
+        · Brent = Futures (BZ=F), nicht Spot · Datenquelle: Yahoo Finance Futures
         · Prognose täglich 09:00 UTC via GitHub Actions
         · <a href="https://github.com/felixschrader/spritpreisprognose" target="_blank">GitHub-Repository</a>
         · Keine Garantie
@@ -1104,6 +1118,6 @@ st.markdown(f"""
     <a href="https://www.linkedin.com/search/results/all/?keywords=Girandoux%20Fandio%20Nganwajop" target="_blank">Girandoux Fandio Nganwajop</a>,
     <a href="https://www.linkedin.com/search/results/all/?keywords=Ghislain%20Wamo" target="_blank">Ghislain Wamo</a><br>
     <a href="https://data-science-institute.de/" target="_blank">DSI — Data Science Institute by Fabian Rappert</a>
-    · Capstone 2026 · Felix Schrader, Girandoux Fandio Nganwajop, Ghislain Wamo
+    · Capstone 2026
 </div>
 """, unsafe_allow_html=True)
