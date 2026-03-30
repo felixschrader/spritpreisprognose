@@ -558,6 +558,7 @@ with tab1:
     ))
 
     # Tages-Mittelwert (Kalendertag). Für heute: bis "jetzt".
+    # Darstellung nur innerhalb der Öffnungszeiten (keine "Nacht-Linie").
     df_hist_day = df_hist.copy()
     df_hist_day["tag"] = df_hist_day["stunde"].dt.normalize()
     if not df_hist_day.empty:
@@ -576,17 +577,43 @@ with tab1:
             )
 
         if df_day_med_parts:
-            df_day_med = pd.concat(df_day_med_parts, ignore_index=True).sort_values("tag")
-            df_day_med = df_day_med.rename(columns={"tag": "stunde"})
-            df_day_med = pd.concat(
-                [df_day_med, pd.DataFrame([{"stunde": jetzt_ts, "preis": letzter_preis}])],
-                ignore_index=True
-            )
-            fig.add_trace(go.Scatter(
-                x=df_day_med["stunde"], y=df_day_med["preis"],
-                mode="lines", name="Tages-Ø",
-                line=dict(color="#1565C0", width=2.5, shape="hv"),
-            ))
+            df_day_mean = pd.concat(df_day_med_parts, ignore_index=True).sort_values("tag")
+
+            def oeffnung_start_ende(tag_ts: pd.Timestamp):
+                wd = tag_ts.dayofweek
+                if wd == 5:   # Sa
+                    start_h = 7
+                elif wd == 6: # So
+                    start_h = 8
+                else:         # Mo–Fr
+                    start_h = 6
+                # Anzeige/Öffnung bis 22:00 (letzte Stunde 21:xx)
+                ende_h = 22
+                return tag_ts + pd.Timedelta(hours=start_h), tag_ts + pd.Timedelta(hours=ende_h)
+
+            # Baue horizontale Segmente pro Tag (open -> close) und trenne Tage mit None.
+            x_seg, y_seg = [], []
+            for _, row in df_day_mean.iterrows():
+                tag_ts = pd.Timestamp(row["tag"])
+                preis_tag = float(row["preis"])
+                start_ts, ende_ts = oeffnung_start_ende(tag_ts)
+
+                # Für heute: Segment endet "jetzt" (falls mitten am Tag).
+                if tag_ts == heute_norm:
+                    ende_ts = min(ende_ts, jetzt_ts)
+                    if jetzt_ts < start_ts:
+                        continue
+
+                x_seg.extend([start_ts, ende_ts, None])
+                y_seg.extend([preis_tag, preis_tag, None])
+
+            if x_seg:
+                fig.add_trace(go.Scatter(
+                    x=x_seg, y=y_seg,
+                    mode="lines", name="Tages-Ø",
+                    line=dict(color="#1565C0", width=2.5),
+                    connectgaps=False,
+                ))
 
     # Prognose-Linie (3h-Bins, bis Mitternacht übermorgen)
     if not df_prognose_bin.empty:
