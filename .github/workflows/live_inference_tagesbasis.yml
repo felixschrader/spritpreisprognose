@@ -54,13 +54,13 @@ jobs:
       # Schritt 7: Prognose-Werte auslesen für Slack
       - name: Prognose auslesen
         run: |
-          echo "KERNPREIS=$(jq -r '.kernpreis_heute' data/ml/prognose_tagesbasis.json)" >> $GITHUB_ENV
-          echo "DELTA=$(jq -r '.delta_prognose' data/ml/prognose_tagesbasis.json)" >> $GITHUB_ENV
+          echo "KERNPREIS=$(jq -r '.kernpreis_aktuell' data/ml/prognose_tagesbasis.json)" >> $GITHUB_ENV
+          echo "DELTA=$(jq -r '.predicted_delta' data/ml/prognose_tagesbasis.json)" >> $GITHUB_ENV
           echo "RICHTUNG=$(jq -r '.richtung' data/ml/prognose_tagesbasis.json)" >> $GITHUB_ENV
           echo "EMPFEHLUNG=$(jq -r '.empfehlung' data/ml/prognose_tagesbasis.json)" >> $GITHUB_ENV
-          echo "DIP_PEAK=$(jq -r '.dip_oder_peak' data/ml/prognose_tagesbasis.json)" >> $GITHUB_ENV
-          echo "BRENT=$(jq -r '.brent_aktuell' data/ml/prognose_tagesbasis.json)" >> $GITHUB_ENV
-          echo "BRENT_TREND=$(jq -r '.brent_trend_7d' data/ml/prognose_tagesbasis.json)" >> $GITHUB_ENV
+          echo "DIP_PEAK=$(jq -r '.begruendung' data/ml/prognose_tagesbasis.json)" >> $GITHUB_ENV
+          echo "BRENT=$(jq -r '.brent_eur' data/ml/prognose_tagesbasis.json)" >> $GITHUB_ENV
+          echo "BRENT_TREND=$(jq -r '.brent_delta2' data/ml/prognose_tagesbasis.json)" >> $GITHUB_ENV
 
       # Schritt 8: Ergebnisse committen und pushen
       - name: Commit and push to main
