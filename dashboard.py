@@ -320,10 +320,12 @@ html, body, [class*="css"], .stApp {
     border-color: #0D47A1 !important;
 }
 
-/* METRIC CARDS */
+/* METRIC CARDS — mittlere Kachel = Tagesmodell (betont) */
 .metric-grid {
-    display: grid; grid-template-columns: repeat(3, 1fr);
-    gap: 1rem 1.1rem; margin-bottom: 1.35rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.22fr) minmax(0, 1fr);
+    gap: 1rem 1.15rem; margin-bottom: 1.35rem;
+    align-items: stretch;
 }
 .card {
     background: var(--surface);
@@ -337,6 +339,12 @@ html, body, [class*="css"], .stApp {
     box-shadow: var(--shadow-card-hover);
     transform: translateY(-2px);
     border-color: #D8DEE9;
+}
+.metric-grid > .card:not(.card--model-direction) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
 }
 .card-title {
     font-size: 0.8rem; font-weight: 600;
@@ -358,6 +366,41 @@ html, body, [class*="css"], .stApp {
 .tendenz-down { color: #2E7D32; }
 .tendenz-up   { color: #C62828; }
 .tendenz-flat { color: #757575; }
+.card--model-direction {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.55rem 1.25rem 1.65rem 1.25rem;
+    min-height: 148px;
+    background: linear-gradient(165deg, #FAFCFE 0%, #F0F4FA 55%, #E8EEF6 100%);
+    border: 1px solid #C5D4E8;
+    box-shadow: 0 2px 8px rgba(13, 71, 161, 0.08), 0 8px 24px rgba(16, 24, 40, 0.06);
+}
+.card--model-direction:hover {
+    border-color: #90CAF9;
+    box-shadow: 0 4px 14px rgba(13, 71, 161, 0.12), 0 12px 32px rgba(16, 24, 40, 0.08);
+}
+.card--model-direction .card-title {
+    margin-bottom: 0.75rem;
+    width: 100%;
+    line-height: 1.35;
+}
+.tendenz-val-model {
+    font-family: 'Plus Jakarta Sans', 'Roboto', sans-serif;
+    font-size: clamp(3.15rem, 6.5vw, 4.25rem);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.06em;
+    display: block;
+    margin: 0 auto;
+    -webkit-text-stroke: 0.025em currentColor;
+    paint-order: stroke fill;
+}
+.card--model-direction .tendenz-down { color: #1B5E20; }
+.card--model-direction .tendenz-up   { color: #B71C1C; }
+.card--model-direction .tendenz-flat { color: #424242; }
 
 /* EMPFEHLUNG */
 .empfehlung-card {
@@ -626,7 +669,11 @@ html, body, [class*="css"], .stApp {
 .footer-mini a:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 2px; }
 
 @media (max-width: 640px) {
-    .metric-grid { grid-template-columns: 1fr; }
+    .metric-grid {
+        grid-template-columns: 1fr;
+        gap: 0.9rem;
+    }
+    .card--model-direction { order: -1; min-height: 132px; }
     .kpi-grid    { grid-template-columns: repeat(2, 1fr); }
     .topbar      { flex-direction: column; padding: 1.1rem 1.15rem; border-radius: 10px; }
     .topbar-right { align-items: flex-start; }
@@ -1007,13 +1054,10 @@ delta_sign = "−" if delta_val < 0 else "+"
 
 if richtung_tage == "fällt":
     tend_pfeil, tend_cls = "↓", "tendenz-down"
-    tend_sub = "Richtung Kernpreis (Modell): tendenziell ↓ · s. Methodik"
 elif richtung_tage == "steigt":
     tend_pfeil, tend_cls = "↑", "tendenz-up"
-    tend_sub = "Richtung Kernpreis (Modell): tendenziell ↑ · s. Methodik"
 else:
     tend_pfeil, tend_cls = "→", "tendenz-flat"
-    tend_sub = "Richtung Kernpreis (Modell): ≈ stabil (± Schwelle) · s. Methodik"
 
 st.markdown(f"""
 <div class="metric-grid">
@@ -1021,15 +1065,14 @@ st.markdown(f"""
         <div class="card-title">Ø gestern</div>
         <div class="card-value">{preis_fmt(mean_ref)} &euro;</div>
     </div>
+    <div class="card card--model-direction">
+        <div class="card-title">Tagesmodell · Kernpreis-Richtung</div>
+        <div class="tendenz-val-model {tend_cls}">{tend_pfeil}</div>
+    </div>
     <div class="card">
         <div class="card-title">Aktueller Preis · {uhrzeit} Uhr</div>
         <div class="card-value">{preis_fmt(letzter_preis)} &euro;</div>
         <div class="card-delta {delta_cls}">{delta_sign} {abs(delta_cent):.1f} ct vs. Ø gestern</div>
-    </div>
-    <div class="card">
-        <div class="card-title">Tagesmodell · Kernpreis-Richtung</div>
-        <div class="tendenz-val {tend_cls}">{tend_pfeil}</div>
-        <div class="card-delta delta-blue">{tend_sub}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
