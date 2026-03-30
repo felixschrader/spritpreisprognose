@@ -749,7 +749,6 @@ with tab1:
             df_brent_plot["brent_eur"] = df_brent_plot["brent_usd"] / eur_usd_fx
             if not df_brent_plot.empty:
                 is_weekend = df_brent_plot["stunde"].dt.dayofweek >= 5
-                y_weekday = df_brent_plot["brent_eur"].where(~is_weekend)
                 y_weekend = df_brent_plot["brent_eur"].where(is_weekend)
                 bruecke_x, bruecke_y = [], []
                 for i in range(1, len(df_brent_plot)):
@@ -763,15 +762,15 @@ with tab1:
                             None
                         ])
 
-                # Hauptlinie: Wochentage in Grün
+                # Hauptlinie: durchgehend in Grün (keine "fehlenden" Abschnitte)
                 fig.add_trace(go.Scatter(
-                    x=df_brent_plot["stunde"], y=y_weekday,
+                    x=df_brent_plot["stunde"], y=df_brent_plot["brent_eur"],
                     mode="lines", name="Brent (EUR/Barrel)",
-                    line=dict(color="#2E7D32", width=1.5),
+                    line=dict(color="#2E7D32", width=1.35),
                     yaxis="y2",
                     connectgaps=False,
                 ))
-                # Wochenende dezent grau/transparenter statt ausgeblendet
+                # Wochenende dezent grau/transparenter überlagern
                 fig.add_trace(go.Scatter(
                     x=df_brent_plot["stunde"], y=y_weekend,
                     mode="lines", name="Brent (Wochenende)",
