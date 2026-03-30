@@ -757,6 +757,44 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
 **Richtung korrekt** = Predicted und Actual auf gleicher Seite der ±0.5ct Schwelle.
 **MAE** = durchschnittliche Abweichung Predicted vs. Actual in Cent.""")
 
+    with st.expander("ℹ️ Wie funktioniert das Modell? (ELI5)"):
+        st.markdown("""
+**Was wird vorhergesagt?**
+
+Jeden Morgen schaut das Modell: *Wird der Diesel-Kernpreis in 2 Tagen höher, niedriger oder gleich sein wie heute?*
+
+Der **Kernpreis** ist der günstigste typische Tagespreis — konkret das 10%-Perzentil der stündlichen Medianpreise zwischen 13 und 20 Uhr. Diese Tageszeit zeigt erfahrungsgemäß das stabilste Preisniveau.
+
+---
+
+**Warum "gleitender 3-Tage-Mittelwert"?**
+
+Ein einzelner Tagespreis springt manchmal stark, obwohl sich am Markt nichts verändert hat (Ausreißer, Fehler, Sonderaktionen). Der gleitende Mittelwert über 3 Tage glättet dieses Rauschen heraus. Das Modell lernt so echte Trends — nicht zufällige Tagesschwankungen.
+
+---
+
+**Was bedeutet "Richtung korrekt"?**
+
+Das Modell sagt einen Wert voraus (z. B. +0.8 ct). Der tatsächliche Wert folgt später (z. B. +1.2 ct). Beide liegen über der +0.5 ct Schwelle → **Richtung korrekt ✅**
+
+Hätte das Modell −0.3 ct vorgesagt (unter der Schwelle = "fällt") und der Preis ist tatsächlich gestiegen → **Richtung falsch ❌**
+
+Die ±0.5 ct Schwelle definiert, was als echte Bewegung gilt — alles darunter ist "stabil".
+
+---
+
+**Was ist der MAE?**
+
+MAE = *Mean Absolute Error* = durchschnittliche Abweichung zwischen Predicted und Actual in Cent.
+Ein MAE von z. B. 1.2 ct bedeutet: das Modell lag im Schnitt 1.2 Cent daneben — unabhängig von der Richtung.
+
+---
+
+**67.9% Richtungs-Accuracy vs. 38.6% Baseline — was heißt das?**
+
+Die Baseline ist die naive Strategie "immer 0 vorhersagen" (stabil). Wer das immer macht, liegt in 38.6% der Fälle richtig — weil Preise oft stabil bleiben. Das Modell schlägt diese Baseline um fast **30 Prozentpunkte**.
+        """)
+
     if df_prog_log.empty:
         st.info("Noch keine Log-Daten verfügbar.")
     else:
