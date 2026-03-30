@@ -316,45 +316,74 @@ def ist_offen(stunde_h, wochentag):
     else:                # Mo–Fr
         return 6 <= stunde_h < 22
 
-def baue_prognose_linie(jetzt_ts, letzter_preis, kern_preis, pred_delta_cent,
-                        stunden_mittel_dict, stunden_std_dict):
+def baue_prognose_linie(jetzt_ts, letzter_preis, kern_preis, pred_delta_cent, hist_28d_df):
     """
-    Prognose-Linie bis Mitternacht übermorgen.
-    Basis: historisches Tagesprofil (28T-Mittel) skaliert auf aktuelles Niveau.
-    Kernpreis (13-20h) bekommt linearen Shift aus Modell-Prognose.
-    Geschlossene Stunden werden ausgelassen.
+    Prognose-Linie in nativen 3h-Bins bis Mitternacht nach übermorgen.
+    Basis: robustes Wochenprofil je 3h-Bin aus 28 Tagen (Median + p10).
+    Modell-Delta wird als linearer 2-Tage-Shift auf die Bin-Basis gelegt.
+    Geschlossene Stunden werden ausgelassen, Nacht wird nicht verbunden.
     """
-    # Skalierungsfaktor: aktueller Kernpreis / historischer Kernpreis-Mittelwert
-    hist_kern_mean = np.mean([stunden_mittel_dict.get(h, kern_preis)
-                              for h in range(13, 21)])
-    if hist_kern_mean > 0 and kern_preis > 0:
-        skala = kern_preis / hist_kern_mean
-    else:
-        skala = 1.0
+    if hist_28d_df.empty:
+        return pd.DataFrame(columns=["stunde", "preis"])
 
-    uebermorgen = (jetzt_ts + timedelta(days=2)).normalize()
+    hist = hist_28d_df.copy()
+    hist["wochentag"] = hist["stunde"].dt.dayofweek
+    hist["stunde_h"] = hist["stunde"].dt.hour
+    hist["bin3"] = (hist["stunde_h"] // 3) * 3
+    hist = hist[hist.apply(lambda r: ist_offen(r["stunde_h"], r["wochentag"]), axis=1)].copy()
+    if hist.empty:
+        return pd.DataFrame(columns=["stunde", "preis"])
+
+    prof = hist.groupby(["wochentag", "bin3"])["preis"].agg(
+        p50="median",
+        p10=lambda x: x.quantile(0.10)
+    ).reset_index()
+    prof_dict = {
+        (int(r["wochentag"]), int(r["bin3"])): (float(r["p50"]), float(r["p10"]))
+        for _, r in prof.iterrows()
+    }
+
+    fallback = hist.groupby("bin3")["preis"].agg(
+        p50="median",
+        p10=lambda x: x.quantile(0.10)
+    ).reset_index()
+    fallback_dict = {
+        int(r["bin3"]): (float(r["p50"]), float(r["p10"]))
+        for _, r in fallback.iterrows()
+    }
+
+    # Niveauanpassung am Kernpreis (13-20h entspricht den 3h-Bins 12, 15, 18)
+    kern_bins = [12, 15, 18]
+    kern_basis = []
+    for b in kern_bins:
+        p = fallback_dict.get(b)
+        if p:
+            kern_basis.append(0.7 * p[0] + 0.3 * p[1])
+    hist_kern = float(np.mean(kern_basis)) if kern_basis else float(letzter_preis)
+    skala = (kern_preis / hist_kern) if hist_kern > 0 and kern_preis > 0 else 1.0
+
+    start_ts = jetzt_ts.floor("3h") + timedelta(hours=3)
+    ende_exklusiv = (jetzt_ts + timedelta(days=3)).normalize()
     punkte = []
-    ts = jetzt_ts.floor("h") + timedelta(hours=1)
+    ts = start_ts
 
-    while ts <= uebermorgen:
-        wochentag = ts.dayofweek
-        stunde_h  = ts.hour
-        if not ist_offen(stunde_h, wochentag):
-            ts += timedelta(hours=1)
+    while ts < ende_exklusiv:
+        wd = ts.dayofweek
+        h = ts.hour
+        if not ist_offen(h, wd):
+            ts += timedelta(hours=3)
             continue
 
-        # Historisches Profil skaliert auf aktuelles Niveau
-        hist_h = stunden_mittel_dict.get(stunde_h, kern_preis) * skala
-
-        # Kernzeit: linearer Shift über 2 Tage
-        tage_seit_jetzt = (ts - jetzt_ts).total_seconds() / 86400
-        if 13 <= stunde_h < 21:
-            shift = pred_delta_cent / 100 * min(tage_seit_jetzt / 2.0, 1.0)
+        p50_p10 = prof_dict.get((wd, h), fallback_dict.get(h))
+        if p50_p10:
+            basis = (0.7 * p50_p10[0] + 0.3 * p50_p10[1]) * skala
         else:
-            shift = 0.0
+            basis = kern_preis
 
-        punkte.append({"stunde": ts, "preis": round(hist_h + shift, 4)})
-        ts += timedelta(hours=1)
+        tage_seit_jetzt = (ts - jetzt_ts).total_seconds() / 86400
+        shift = (pred_delta_cent / 100.0) * min(max(tage_seit_jetzt / 2.0, 0.0), 1.0)
+        punkte.append({"stunde": ts, "preis": round(basis + shift, 4)})
+        ts += timedelta(hours=3)
 
     return pd.DataFrame(punkte)
 
@@ -412,23 +441,18 @@ df_hist = df_hist[df_hist.apply(
     lambda r: ist_offen(r["stunde_h"], r["wochentag"]), axis=1
 )].reset_index(drop=True)
 
-# Rolling 28-Tage Stundenmittelwerte
+# Rolling 28-Tage Basis für Prognoseprofil
 hist_28d = df_ext[df_ext["stunde"] >= cutoff_28d].copy()
-hist_28d["stunde_h"] = hist_28d["stunde"].dt.hour
-stunden_mittel = hist_28d.groupby("stunde_h")["preis"].mean().to_dict()
-stunden_std    = hist_28d.groupby("stunde_h")["preis"].std().fillna(0).to_dict()
 
 # Prognose-Linie
 df_prognose_linie = baue_prognose_linie(
     jetzt_ts, letzter_preis, kern_preis,
-    pred_delta_cent, stunden_mittel, stunden_std
+    pred_delta_cent, hist_28d
 )
 
 # 3h-Bins für Prognose-Darstellung
 if not df_prognose_linie.empty:
-    df_prognose_linie["stunde_bin"] = df_prognose_linie["stunde"].dt.floor("3h")
-    df_prognose_bin = df_prognose_linie.groupby("stunde_bin")["preis"].mean().reset_index()
-    df_prognose_bin = df_prognose_bin.rename(columns={"stunde_bin": "stunde"})
+    df_prognose_bin = df_prognose_linie.copy().sort_values("stunde").reset_index(drop=True)
 else:
     df_prognose_bin = pd.DataFrame(columns=["stunde", "preis"])
 
