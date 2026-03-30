@@ -8,10 +8,9 @@ name: Brent Preise aktualisieren
 
 on:
   schedule:
-    # Läuft zweimal täglich: 8:00 und 20:00 Uhr Berliner Zeit
+    # Läuft alle 2 Stunden (UTC), um Brent-Intraday deutlich frischer zu halten.
     # Cron-Syntax: Minute Stunde Tag Monat Wochentag (immer UTC!)
-    # MEZ = UTC+1, MESZ = UTC+2 — hier UTC+1 (Winterzeit als Basis)
-    - cron: '0 7,19 * * *'
+    - cron: '0 */2 * * *'
   workflow_dispatch:  # Manueller Start über GitHub UI jederzeit möglich
 
 permissions:
