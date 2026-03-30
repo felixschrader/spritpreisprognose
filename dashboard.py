@@ -823,7 +823,7 @@ def _richtung_laien(richtung_tage: str) -> str:
 
 
 @st.cache_data(ttl=3600)
-def generiere_empfehlung(preis, mean_ref, richtung_tage, brent_vs_3d_pct, _prompt_version: int = 2):
+def generiere_empfehlung(preis, mean_ref, richtung_tage, brent_vs_3d_pct, _prompt_version: int = 3):
     r_plain = _richtung_laien(richtung_tage)
     prompt = f"""Du bist ein Datenanalyst. Schreibe genau 2 vollständige Sätze auf Deutsch — sachlich und etwas präziser als Alltagssmalltalk, aber für Laien verständlich (kein Fach-Kauderwelsch).
 
@@ -841,7 +841,7 @@ Regeln für den sichtbaren Text:
 - Satz 2 muss außerdem die Prozent-Bewegung und die grobe Modellrichtung (steigend/fallend/eher seitwärts) einordnen
 - Ton: nicht platt oder kindlich; kein Konjunktiv, keine abgebrochenen Sätze
 - Keine Hinweise auf fehlende Daten
-- Maximal 45 Wörter gesamt"""
+- Maximal 45 Wörter gesamt; Antwort mit Punkt abschließen"""
 
     r = requests.post(
         "https://api.anthropic.com/v1/messages",
@@ -850,7 +850,7 @@ Regeln für den sichtbaren Text:
             "x-api-key": st.secrets["ANTHROPIC_API_KEY"],
             "anthropic-version": "2023-06-01",
         },
-        json={"model": "claude-haiku-4-5-20251001", "max_tokens": 100,
+        json={"model": "claude-haiku-4-5-20251001", "max_tokens": 320,
               "messages": [{"role": "user", "content": prompt}]},
         timeout=10
     )
@@ -1563,6 +1563,7 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
         st.info("Noch keine Log-Daten verfügbar.")
     else:
         heute_dt = jetzt_ts.normalize()
+        gestern_ts = heute_dt - pd.Timedelta(days=1)
         start_laufende_woche = heute_dt - pd.Timedelta(days=heute_dt.dayofweek)
         # Letzte 3 vollständige Kalenderwochen (Mo–So), ohne laufende Woche
         first_day_3voll = start_laufende_woche - pd.Timedelta(weeks=3)
@@ -1571,7 +1572,10 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
         df_log_3w = df_prog_log[
             (df_prog_log["datum"] >= first_day_3voll) & (df_prog_log["datum"] <= last_day_3voll)
         ].copy().sort_values("datum")
-        df_log_14 = df_prog_log[df_prog_log["datum"] >= (heute_dt - pd.Timedelta(days=14))].copy().sort_values("datum")
+        df_log_14 = df_prog_log[
+            (df_prog_log["datum"] >= (heute_dt - pd.Timedelta(days=14)))
+            & (df_prog_log["datum"].dt.normalize() <= gestern_ts)
+        ].copy().sort_values("datum")
 
         n_tage    = len(df_log_3w)
         n_korrekt = int(df_log_3w["richtung_korrekt"].sum()) if n_tage > 0 else 0
@@ -1600,15 +1604,15 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
         </div>
         """, unsafe_allow_html=True)
 
-        # Prognose-Trefferquote (Kalender): 4 aufeinanderfolgende Mo–So-Wochen inkl. laufender Woche (bis gestern)
+        # Prognose-Trefferquote (Kalender): 4 Mo–So-Wochen inkl. laufender Woche; Kacheln nur bis gestern (kein heute)
         montag_4w_start = start_laufende_woche - pd.Timedelta(weeks=3)
         sonntag_woche_aktuell = start_laufende_woche + pd.Timedelta(days=6)
-        tag_letzte_log = (jetzt_ts.normalize() - pd.Timedelta(days=1)).date()  # Balken: nur bis gestern aggregieren
         st.markdown(
             '<div class="section-label">Prognose-Trefferquote — letzte 4 Kalenderwochen (inkl. laufende Woche)</div>',
             unsafe_allow_html=True,
         )
         st.caption(
+            "Grün/Rot nur für abgeschlossene Tage (bis gestern). "
             "Grün = Richtung korrekt · Rot = falsch · P = predicted Δ · A = actual Δ · Schwelle: ±0.5 ct"
         )
 
@@ -1623,7 +1627,10 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
         fd = pd.Timestamp(montag_4w_start).date()
         ld = pd.Timestamp(sonntag_woche_aktuell).date()
         alle_tage = [fd + timedelta(days=i) for i in range((ld - fd).days + 1)]
-        log_dict = {row["datum"].date(): row for _, row in df_prog_log.iterrows()}
+        df_prog_bis_gestern = df_prog_log[
+            df_prog_log["datum"].dt.normalize() <= gestern_ts
+        ]
+        log_dict = {row["datum"].date(): row for _, row in df_prog_bis_gestern.iterrows()}
 
         header_html = (
             '<div class="kalender-woche">'
@@ -1676,15 +1683,13 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
             woche_html += "</div>"
             st.markdown(woche_html, unsafe_allow_html=True)
 
-        # Wöchentliche Trefferquote: 4 Wochen (älteste … laufende Woche), Schlüssel = Wochenende So.
-        sonntage_4w = pd.to_datetime(
-            [montag_4w_start + pd.Timedelta(days=6 + 7 * i) for i in range(4)]
-        ).normalize()
-        df_log_4w_bar = df_prog_log[
-            (df_prog_log["datum"] >= montag_4w_start)
-            & (df_prog_log["datum"] <= pd.Timestamp(tag_letzte_log))
-        ].copy()
-        df_week = df_log_4w_bar.copy()
+        # Wöchentliche Trefferquote: 3 letzte vollständige Kalenderwochen (Mo–So), Schlüssel = Wochenende So.
+        sonntage_3voll = pd.to_datetime([
+            start_laufende_woche - pd.Timedelta(days=15),
+            start_laufende_woche - pd.Timedelta(days=8),
+            start_laufende_woche - pd.Timedelta(days=1),
+        ]).normalize()
+        df_week = df_log_3w.copy()
         if not df_week.empty:
             d = df_week["datum"].dt.normalize()
             df_week["wochenende_so"] = d + pd.to_timedelta((6 - d.dt.dayofweek) % 7, unit="D")
@@ -1697,12 +1702,12 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
         else:
             df_week_acc = pd.DataFrame(columns=["wochenende_so", "acc_pct", "n_tage"])
 
-        df_plot = pd.DataFrame({"wochenende_so": sonntage_4w})
+        df_plot = pd.DataFrame({"wochenende_so": sonntage_3voll})
         df_plot = df_plot.merge(df_week_acc, on="wochenende_so", how="left")
         df_plot["n_tage"] = df_plot["n_tage"].fillna(0).astype(int)
         df_plot["acc_pct"] = df_plot["acc_pct"].where(df_plot["n_tage"] > 0)
         st.markdown(
-            '<div class="section-label">Wöchentliche Trefferquote — 4 Kalenderwochen (Mo–So)</div>',
+            '<div class="section-label">Wöchentliche Trefferquote — 3 vollständige Kalenderwochen (Mo–So)</div>',
             unsafe_allow_html=True,
         )
         fig_week = go.Figure()
@@ -1729,9 +1734,11 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
         )
         st.plotly_chart(fig_week, use_container_width=True)
 
-        # Predicted vs. Actual — letzte 14 Tage
-        st.markdown('<div class="section-label">Predicted vs. Actual Delta — letzte 14 Tage (Cent)</div>',
-                    unsafe_allow_html=True)
+        # Predicted vs. Actual — letzte 14 Tage bis gestern
+        st.markdown(
+            '<div class="section-label">Predicted vs. Actual Delta — letzte 14 Tage bis gestern (Cent)</div>',
+            unsafe_allow_html=True,
+        )
         if not df_log_14.empty:
             fig_perf = go.Figure()
             fig_perf.add_trace(go.Scatter(
