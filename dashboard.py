@@ -658,7 +658,6 @@ button.topbar-refresh {
 .tag-kachel.korrekt { background: #E8F5E9; color: #1B5E20; border: 1px solid #A5D6A7; }
 .tag-kachel.falsch  { background: #FFEBEE; color: #B71C1C; border: 1px solid #EF9A9A; }
 .tag-kachel.leer    { background: transparent; border: 1px solid #F0F0F0; }
-.tag-kachel-heute .tag-hint { font-size: 0.72rem; color: #9E9E9E; font-weight: 500; margin-top: 2px; text-align: center; line-height: 1.25; }
 .tag-symbol { font-size: 1.1rem; }
 .tag-datum  { font-size: 0.82rem; font-weight: 600; }
 .tag-delta  { font-size: 0.8rem; }
@@ -1621,7 +1620,7 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
         </div>
         """, unsafe_allow_html=True)
 
-        # Prognose-Trefferquote (Kalender): 4 Mo–So-Wochen inkl. laufender Woche; Kacheln nur bis gestern (kein heute)
+        # Prognose-Trefferquote (Kalender): 4 Mo–So-Wochen; farbige Kacheln nur bei Log-Zeile (bis gestern)
         montag_4w_start = start_laufende_woche - pd.Timedelta(weeks=3)
         sonntag_woche_aktuell = start_laufende_woche + pd.Timedelta(days=6)
         st.markdown(
@@ -1629,8 +1628,8 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
             unsafe_allow_html=True,
         )
         st.caption(
-            "Grün/Rot nur für abgeschlossene Kalendertage (nicht für den laufenden Tag). "
-            "Grün = Richtung korrekt · Rot = falsch · P = predicted Δ · A = actual Δ · Schwelle: ±0.5 ct"
+            "Grün = Richtung korrekt · Rot = falsch · P = predicted Δ · A = actual Δ · Schwelle: ±0.5 ct "
+            "(nur Tage mit Log-Eintrag)"
         )
 
         def rich_pfeil(delta_ct):
@@ -1688,17 +1687,8 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
                         <span class="tag-delta">P {p_pf} {p_ct:+.1f}</span>
                         <span class="tag-delta">A {a_pf} {a_ct:+.1f}</span>
                     </div>"""
-                elif tag > heute_date:
-                    woche_html += '<div class="tag-kachel leer"></div>'
-                elif tag == heute_date:
-                    woche_html += f"""<div class="tag-kachel leer tag-kachel-heute">
-                        <span class="tag-datum">{tag.strftime('%d.%m')}</span>
-                        <span class="tag-hint">noch ohne Auswertung</span>
-                    </div>"""
                 else:
-                    woche_html += f"""<div class="tag-kachel leer">
-                        <span class="tag-datum">{tag.strftime('%d.%m')}</span>
-                    </div>"""
+                    woche_html += '<div class="tag-kachel leer"></div>'
             for _ in range(6 - letzter_wt):
                 woche_html += '<div class="tag-kachel leer"></div>'
             woche_html += "</div>"
@@ -1755,12 +1745,12 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
         )
         st.plotly_chart(fig_week, use_container_width=True)
 
-        # Predicted vs. Actual — letzte 14 Tage
-        st.markdown(
-            '<div class="section-label">Predicted vs. Actual Delta — letzte 14 Tage (Cent)</div>',
-            unsafe_allow_html=True,
-        )
+        # Predicted vs. Actual — nur wenn Log-Punkte im Fenster vorhanden
         if not df_log_14.empty:
+            st.markdown(
+                '<div class="section-label">Predicted vs. Actual Delta — letzte 14 Tage (Cent)</div>',
+                unsafe_allow_html=True,
+            )
             # Explizit Europe/Berlin, damit Plotly die Achse nicht als UTC-Mitternacht verschiebt
             x_14 = pd.to_datetime(df_log_14["_tag"].astype(str)).dt.tz_localize(BERLIN)
             fig_perf = go.Figure()
@@ -1794,8 +1784,6 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
             )
             st.plotly_chart(fig_perf, use_container_width=True)
             st.caption("Grauer Bereich = ±0.5 ct Stabilitätsschwelle")
-        else:
-            st.info("Noch nicht genug Daten.")
 
 # ── Social & Methodik (nach Tabs, vor Footer) ───────────────────────────────
 st.markdown(f"""
