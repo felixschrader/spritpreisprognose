@@ -2,11 +2,13 @@
 # Streamlit Cloud · DSI Capstone 2026
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import requests
 from datetime import datetime, timedelta
+from urllib.parse import quote
 import pytz
 
 st.set_page_config(
@@ -16,6 +18,9 @@ st.set_page_config(
 )
 
 STATION_UUID = "e1aefc4e-3ca1-4018-8d91-455b69d35d41"
+# Referenzpunkt wie in tankerkoenig_pipeline.py (Köln · Aral Dürener Str. 407)
+STATION_LAT  = 50.919537
+STATION_LON  = 6.852624
 BASE_URL     = "https://raw.githubusercontent.com/felixschrader/spritpreisprognose/main"
 JSON_URL     = f"{BASE_URL}/data/ml/prognose_aktuell.json"
 TAGES_URL    = f"{BASE_URL}/data/ml/prognose_tagesbasis.json"
@@ -36,6 +41,22 @@ OEFFNUNGSZEITEN = [
     ("Sa",      "07:00 – 22:00"),
     ("So",      "08:00 – 22:00"),
 ]
+
+def osm_standort_embed(lat: float, lon: float, height: int = 200) -> None:
+    """Kleine OpenStreetMap-Karte (Embed) mit Pflicht-Attribution."""
+    dlon, dlat = 0.007, 0.005
+    bbox = f"{lon - dlon},{lat - dlat},{lon + dlon},{lat + dlat}"
+    src = (
+        "https://www.openstreetmap.org/export/embed.html?"
+        f"bbox={quote(bbox)}&layer=mapnik&marker={quote(f'{lat},{lon}')}"
+    )
+    html = f"""<div style="margin:0;padding:0;border-radius:8px;overflow:hidden;border:1px solid #E0E0E0;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+<iframe title="OpenStreetMap Standort Tankstelle" width="100%" height="{height}" style="border:0;display:block;" loading="lazy" src="{src}"></iframe>
+</div>
+<div style="font-size:0.78rem;color:#757575;margin-top:6px;font-family:Roboto,sans-serif;line-height:1.4;">
+© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" style="color:#616161;">OpenStreetMap</a>
+</div>"""
+    components.html(html, height=height + 32, scrolling=False)
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -169,6 +190,12 @@ html, body, [class*="css"], .stApp {
     border-top: 1px solid #F5F5F5;
 }
 .ki-footer a { color: #757575; text-decoration: none; }
+
+/* OSM-Karte */
+.osm-map-title {
+    font-size: 0.95rem; font-weight: 500; color: #616161;
+    margin: 0.25rem 0 0.5rem 0;
+}
 
 /* SECTION LABEL */
 .section-label {
@@ -599,6 +626,12 @@ st.markdown(f"""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+st.markdown(
+    '<div class="osm-map-title">Standort · ARAL Dürener Str. 407</div>',
+    unsafe_allow_html=True,
+)
+osm_standort_embed(STATION_LAT, STATION_LON)
 
 # Refresh via Query-Parameter (Button sitzt im blauen Top-Block)
 if st.query_params.get("refresh") == "1":
