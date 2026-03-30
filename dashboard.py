@@ -319,9 +319,10 @@ def ist_offen(stunde_h, wochentag):
 def baue_prognose_linie(jetzt_ts, letzter_preis, kern_preis, pred_delta_cent, hist_28d_df):
     """
     Prognose-Linie in nativen 3h-Bins bis Mitternacht nach übermorgen.
-    Basis: robustes Wochenprofil je 3h-Bin aus 28 Tagen (Median + p10).
+    Basis: robustes Wochenprofil je 3h-Bin aus 28 Tagen (Median + p10, leicht gewichtet).
     Modell-Delta wird als linearer 2-Tage-Shift auf die Bin-Basis gelegt.
     Geschlossene Stunden werden ausgelassen, Nacht wird nicht verbunden.
+    Zusätzlich werden unrealistische Sprünge (Niveau + Bin-zu-Bin) begrenzt.
     """
     if hist_28d_df.empty:
         return pd.DataFrame(columns=["stunde", "preis"])
@@ -366,6 +367,7 @@ def baue_prognose_linie(jetzt_ts, letzter_preis, kern_preis, pred_delta_cent, hi
     ende_exklusiv = (jetzt_ts + timedelta(days=3)).normalize()
     punkte = []
     ts = start_ts
+    prev_preis = float(letzter_preis)
 
     while ts < ende_exklusiv:
         wd = ts.dayofweek
@@ -376,13 +378,31 @@ def baue_prognose_linie(jetzt_ts, letzter_preis, kern_preis, pred_delta_cent, hi
 
         p50_p10 = prof_dict.get((wd, h), fallback_dict.get(h))
         if p50_p10:
-            basis = (0.7 * p50_p10[0] + 0.3 * p50_p10[1]) * skala
+            # p10 nur leicht beimischen, damit Morgen/Übermorgen nicht zu tief laufen
+            basis = (0.9 * p50_p10[0] + 0.1 * p50_p10[1]) * skala
         else:
             basis = kern_preis
 
         tage_seit_jetzt = (ts - jetzt_ts).total_seconds() / 86400
         shift = (pred_delta_cent / 100.0) * min(max(tage_seit_jetzt / 2.0, 0.0), 1.0)
-        punkte.append({"stunde": ts, "preis": round(basis + shift, 4)})
+        ziel_preis = basis + shift
+
+        # 1) Absolutniveau um den Live-Preis begrenzen (eng heute, lockerer Richtung übermorgen)
+        if tage_seit_jetzt <= 1.0:
+            max_abs_abweichung = 0.06   # +/- 6 ct bis morgen
+        elif tage_seit_jetzt <= 2.0:
+            max_abs_abweichung = 0.10   # +/- 10 ct bis übermorgen
+        else:
+            max_abs_abweichung = 0.12
+        ziel_preis = min(max(ziel_preis, letzter_preis - max_abs_abweichung),
+                         letzter_preis + max_abs_abweichung)
+
+        # 2) Bin-zu-Bin-Sprung begrenzen (keine abrupten 3h-Zacken)
+        max_step = 0.025  # 2.5 ct pro 3h-Bin
+        geglaettet = min(max(ziel_preis, prev_preis - max_step), prev_preis + max_step)
+
+        punkte.append({"stunde": ts, "preis": round(geglaettet, 4)})
+        prev_preis = geglaettet
         ts += timedelta(hours=3)
 
     return pd.DataFrame(punkte)
