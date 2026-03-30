@@ -8,7 +8,6 @@ import numpy as np
 import plotly.graph_objects as go
 import requests
 from datetime import datetime, timedelta
-from urllib.parse import quote
 import pytz
 
 st.set_page_config(
@@ -22,6 +21,8 @@ STATION_UUID = "e1aefc4e-3ca1-4018-8d91-455b69d35d41"
 STATION_LAT  = 50.919537
 STATION_LON  = 6.852624
 ARAL_STATION_URL = "https://tankstelle.aral.de/koeln/duerener-strasse-407/20185400"
+# Leaflet: fester Zoom bei jedem Laden (kein fitBounds)
+MAP_INITIAL_ZOOM = 16
 BASE_URL     = "https://raw.githubusercontent.com/felixschrader/spritpreisprognose/main"
 JSON_URL     = f"{BASE_URL}/data/ml/prognose_aktuell.json"
 TAGES_URL    = f"{BASE_URL}/data/ml/prognose_tagesbasis.json"
@@ -46,21 +47,83 @@ OEFFNUNGSZEITEN = [
 _SVG_GH = """<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#24292f" d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.31 24 12c0-6.63-5.37-12-12-12z"/></svg>"""
 _SVG_IN = """<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#0A66C2" d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 1 1 0-4.125 2.062 2.062 0 0 1 0 4.125zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>"""
 
-def osm_standort_embed(lat: float, lon: float, height: int = 200) -> None:
-    """Kleine OpenStreetMap-Karte (Embed) mit Pflicht-Attribution."""
-    dlon, dlat = 0.007, 0.005
-    bbox = f"{lon - dlon},{lat - dlat},{lon + dlon},{lat + dlat}"
-    src = (
-        "https://www.openstreetmap.org/export/embed.html?"
-        f"bbox={quote(bbox)}&layer=mapnik&marker={quote(f'{lat},{lon}')}"
-    )
-    html = f"""<div style="margin:0;padding:0;border-radius:8px;overflow:hidden;border:1px solid #E0E0E0;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-<iframe title="OpenStreetMap Standort Tankstelle" width="100%" height="{height}" style="border:0;display:block;" loading="lazy" src="{src}"></iframe>
+def osm_standort_embed(
+    lat: float,
+    lon: float,
+    height: int = 200,
+    zoom: int = MAP_INITIAL_ZOOM,
+) -> None:
+    """OpenStreetMap über Leaflet: fester Zoom, Marker, Vollbild-Button."""
+    z = int(zoom)
+    html = f"""
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+<style>
+.osm-leaflet-wrap {{ margin:0; border-radius:8px; border:1px solid #E0E0E0; box-shadow:0 1px 3px rgba(0,0,0,0.06); overflow:hidden; position:relative; background:#ECEFF1; }}
+.osm-leaflet-fs {{ position:relative; width:100%; height:{height}px; }}
+.osm-leaflet-fs:fullscreen {{ height:100vh !important; width:100% !important; border-radius:0; }}
+.osm-leaflet-fs:fullscreen .osm-leaflet-inner {{ height:100vh !important; }}
+.osm-fs-btn {{
+  position:absolute; z-index:1000; top:8px; right:8px;
+  padding:6px 12px; font-size:12px; font-weight:500; font-family:Roboto,sans-serif;
+  cursor:pointer; border:1px solid #BDBDBD; border-radius:6px;
+  background:#FFFFFF; color:#424242; box-shadow:0 1px 4px rgba(0,0,0,0.12);
+}}
+.osm-fs-btn:hover {{ background:#F5F5F5; border-color:#9E9E9E; }}
+.osm-leaflet-inner {{ width:100%; height:100%; min-height:{height}px; }}
+.osm-osm-attribution {{ font-size:0.78rem; color:#757575; margin-top:6px; font-family:Roboto,sans-serif; line-height:1.4; }}
+</style>
+<div class="osm-leaflet-wrap">
+  <div id="osm-leaflet-fs" class="osm-leaflet-fs">
+    <button type="button" class="osm-fs-btn" id="osm-fs-btn" title="Karte im Vollbild">Vollbild</button>
+    <div id="osm-leaflet-map" class="osm-leaflet-inner" role="img" aria-label="Karte Standort Tankstelle"></div>
+  </div>
 </div>
-<div style="font-size:0.78rem;color:#757575;margin-top:6px;font-family:Roboto,sans-serif;line-height:1.4;">
-© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" style="color:#616161;">OpenStreetMap</a>
-</div>"""
-    components.html(html, height=height + 32, scrolling=False)
+<div class="osm-osm-attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" style="color:#616161;">OpenStreetMap</a></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+(function() {{
+  var lat = {lat}, lon = {lon}, zoom = {z}, mapH = {height};
+  function invalidate(m) {{ if (m) {{ setTimeout(function() {{ m.invalidateSize(true); }}, 50); }} }}
+  function init() {{
+    var el = document.getElementById('osm-leaflet-map');
+    if (!el || typeof L === 'undefined') return;
+    var map = L.map('osm-leaflet-map', {{
+      zoomControl: true, scrollWheelZoom: true, attributionControl: false
+    }});
+    map.setView([lat, lon], zoom, {{ animate: false }});
+    L.tileLayer('https://tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+      maxZoom: 19, attribution: ''
+    }}).addTo(map);
+    L.marker([lat, lon]).addTo(map);
+    var fsRoot = document.getElementById('osm-leaflet-fs');
+    var btn = document.getElementById('osm-fs-btn');
+    btn.addEventListener('click', function() {{
+      if (!document.fullscreenElement) {{
+        fsRoot.requestFullscreen().catch(function() {{}});
+      }} else {{
+        document.exitFullscreen();
+      }}
+    }});
+    document.addEventListener('fullscreenchange', function() {{
+      var inner = document.getElementById('osm-leaflet-map');
+      if (document.fullscreenElement === fsRoot) {{
+        btn.textContent = 'Vollbild beenden';
+        inner.style.minHeight = '100vh';
+        fsRoot.style.height = '100vh';
+      }} else {{
+        btn.textContent = 'Vollbild';
+        inner.style.minHeight = mapH + 'px';
+        fsRoot.style.height = mapH + 'px';
+      }}
+      invalidate(map);
+    }});
+    invalidate(map);
+  }}
+  setTimeout(init, 0);
+}})();
+</script>
+"""
+    components.html(html, height=height + 36, scrolling=False)
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
