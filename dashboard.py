@@ -329,27 +329,38 @@ def lade_brent_intraday_yahoo():
     Keine zusätzlichen Dependencies; kann gelegentlich rate-limited sein.
     """
     try:
-        url = "https://query1.finance.yahoo.com/v8/finance/chart/BZ=F"
-        params = {"interval": "1h", "range": "7d"}
-        r = requests.get(url, params=params, timeout=10)
-        data = r.json()
-        result = (data.get("chart") or {}).get("result") or []
-        if not result:
-            return pd.DataFrame(columns=["stunde", "brent_usd"])
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            )
+        }
+        urls = [
+            "https://query1.finance.yahoo.com/v8/finance/chart/BZ=F",
+            "https://query2.finance.yahoo.com/v8/finance/chart/BZ=F",
+        ]
+        for url in urls:
+            r = requests.get(url, params={"interval": "1h", "range": "7d"}, headers=headers, timeout=12)
+            data = r.json()
+            result = (data.get("chart") or {}).get("result") or []
+            if not result:
+                continue
 
-        res0 = result[0]
-        ts = res0.get("timestamp") or []
-        ind = ((res0.get("indicators") or {}).get("quote") or [{}])[0]
-        closes = ind.get("close") or []
-        if not ts or not closes or len(ts) != len(closes):
-            return pd.DataFrame(columns=["stunde", "brent_usd"])
+            res0 = result[0]
+            ts = res0.get("timestamp") or []
+            ind = ((res0.get("indicators") or {}).get("quote") or [{}])[0]
+            closes = ind.get("close") or []
+            if not ts or not closes or len(ts) != len(closes):
+                continue
 
-        df = pd.DataFrame({"stunde": pd.to_datetime(ts, unit="s"), "brent_usd": closes})
-        df["brent_usd"] = pd.to_numeric(df["brent_usd"], errors="coerce")
-        df = df.dropna().sort_values("stunde").reset_index(drop=True)
-        return df
+            df = pd.DataFrame({"stunde": pd.to_datetime(ts, unit="s"), "brent_usd": closes})
+            df["brent_usd"] = pd.to_numeric(df["brent_usd"], errors="coerce")
+            df = df.dropna().sort_values("stunde").reset_index(drop=True)
+            if not df.empty:
+                return df
     except:
-        return pd.DataFrame(columns=["stunde", "brent_usd"])
+        pass
+    return pd.DataFrame(columns=["stunde", "brent_usd"])
 
 @st.cache_data(ttl=900)
 def lade_brent_intraday_csv():
@@ -527,7 +538,7 @@ elif not df_brent_yahoo.empty:
 else:
     df_brent = lade_brent_intraday_csv()
     has_td_key = bool(st.secrets.get("TWELVE_DATA_KEY") or os.getenv("TWELVE_DATA_KEY"))
-    brent_source = "CSV-Fallback (kein Twelve-Data-Key)" if not has_td_key else "CSV-Fallback (keine Live-Daten)"
+    brent_source = "CSV-Fallback (kein Twelve-Data-Key)" if not has_td_key else "CSV-Fallback (Twelve Data/Yahoo ohne Live-Daten)"
 df_brent_daily = lade_brent_daily()
 eur_usd_fx  = lade_eurusd()
 
