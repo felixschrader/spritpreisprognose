@@ -274,7 +274,7 @@ def generiere_empfehlung(preis, mean_24h, richtung_tage, brent_delta, residuum):
     prompt = f"""Du bist ein nüchterner Datenanalyst. Schreibe genau 2 Sätze auf Deutsch.
 
 Daten:
-- Aktueller Preis: {preis:.3f} € ({preis - mean_24h:+.3f} € vs. 24h-Median)
+- Aktueller Preis: {preis:.3f} € ({preis - mean_24h:+.3f} € vs. Tagesmittel heute bis jetzt)
 - Tages-Modell (Horizont 2 Tage): Richtung {richtung_tage}
 - Brent-Delta (2 Tage): {brent_delta:+.2f} €/Barrel
 - ARAL vs. NRW-Markt: {residuum:+.1f} Cent
@@ -431,13 +431,13 @@ if not df_prognose_linie.empty:
 else:
     df_prognose_bin = pd.DataFrame(columns=["stunde", "preis"])
 
-# Tages-Median (Kalendertag). Für heute: Median von 00:00 bis "jetzt".
+# Tages-Mittelwert (Kalendertag). Für heute: Mittelwert von 00:00 bis "jetzt".
 start_heute = jetzt_ts.normalize()
 df_today = df_hist[(df_hist["stunde"] >= start_heute) & (df_hist["stunde"] <= jetzt_ts)].copy()
 if df_today.empty:
     mean_24h = float(letzter_preis)
 else:
-    mean_24h = float(df_today["preis"].median())
+    mean_24h = float(df_today["preis"].mean())
 
 # KI-Empfehlung
 try:
@@ -500,13 +500,13 @@ else:
 st.markdown(f"""
 <div class="metric-grid">
     <div class="card">
-        <div class="card-title">Median heute (bis jetzt)</div>
+        <div class="card-title">Ø heute (bis jetzt)</div>
         <div class="card-value">{preis_fmt(mean_24h)} &euro;</div>
     </div>
     <div class="card">
         <div class="card-title">Aktueller Preis · {uhrzeit} Uhr</div>
         <div class="card-value">{preis_fmt(letzter_preis)} &euro;</div>
-        <div class="card-delta {delta_cls}">{delta_sign} {abs(delta_val):.2f} &euro; vs. Median heute</div>
+        <div class="card-delta {delta_cls}">{delta_sign} {abs(delta_val):.2f} &euro; vs. Ø heute</div>
     </div>
     <div class="card">
         <div class="card-title">Tages-Prognose · übermorgen</div>
@@ -557,7 +557,7 @@ with tab1:
         line=dict(color="#BDBDBD", width=1.5, shape="hv"),
     ))
 
-    # Tages-Median (Kalendertag). Für heute: bis "jetzt".
+    # Tages-Mittelwert (Kalendertag). Für heute: bis "jetzt".
     df_hist_day = df_hist.copy()
     df_hist_day["tag"] = df_hist_day["stunde"].dt.normalize()
     if not df_hist_day.empty:
@@ -568,11 +568,11 @@ with tab1:
         df_day_med_parts = []
         if not df_past.empty:
             df_day_med_parts.append(
-                df_past.groupby("tag")["preis"].median().reset_index(name="preis")
+                df_past.groupby("tag")["preis"].mean().reset_index(name="preis")
             )
         if not df_today2.empty:
             df_day_med_parts.append(
-                pd.DataFrame([{"tag": heute_norm, "preis": float(df_today2["preis"].median())}])
+                pd.DataFrame([{"tag": heute_norm, "preis": float(df_today2["preis"].mean())}])
             )
 
         if df_day_med_parts:
@@ -584,7 +584,7 @@ with tab1:
             )
             fig.add_trace(go.Scatter(
                 x=df_day_med["stunde"], y=df_day_med["preis"],
-                mode="lines", name="Tages-Median",
+                mode="lines", name="Tages-Ø",
                 line=dict(color="#1565C0", width=2.5, shape="hv"),
             ))
 
