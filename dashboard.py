@@ -8,7 +8,6 @@ import plotly.graph_objects as go
 import requests
 from datetime import datetime, timedelta
 import pytz
-import os
 
 st.set_page_config(
     page_title="Dieselpreis · Köln",
@@ -273,95 +272,6 @@ def lade_prognose_log():
     except:
         return pd.DataFrame(columns=["datum", "predicted_delta", "actual_delta", "richtung_korrekt"])
 
-@st.cache_data(ttl=600)
-def lade_brent_intraday_live():
-    """
-    Holt Brent-Futures intraday live via Twelve Data (1h).
-    Fallback wird außerhalb gemacht, wenn leer/Fehler.
-    """
-    try:
-        api_key = st.secrets.get("TWELVE_DATA_KEY") or os.getenv("TWELVE_DATA_KEY")
-        if not api_key:
-            return pd.DataFrame(columns=["stunde", "brent_usd"])
-
-        # Twelve Data Symbol-Namen variieren je nach Datensatz.
-        # Wir probieren mehrere Kandidaten und nehmen den ersten, der liefert.
-        candidates = ["BZ=F", "BZ", "BRENT"]
-        base_url = "https://api.twelvedata.com/time_series"
-
-        for sym in candidates:
-            r = requests.get(
-                base_url,
-                params={
-                    "symbol": sym,
-                    "interval": "1h",
-                    "outputsize": 300,
-                    "apikey": api_key,
-                    "format": "JSON",
-                },
-                timeout=10,
-            )
-            data = r.json()
-            values = data.get("values")
-            if not isinstance(values, list) or len(values) == 0:
-                continue
-
-            df = pd.DataFrame(values)
-            if "datetime" not in df.columns:
-                continue
-
-            # Twelve Data liefert Strings; Close reicht für die Linie.
-            df = df.rename(columns={"datetime": "stunde", "close": "brent_usd"})
-            df["stunde"] = pd.to_datetime(df["stunde"], errors="coerce")
-            df["brent_usd"] = pd.to_numeric(df["brent_usd"], errors="coerce")
-            df = df[["stunde", "brent_usd"]].dropna().sort_values("stunde").reset_index(drop=True)
-            if not df.empty:
-                return df
-    except:
-        pass
-
-    return pd.DataFrame(columns=["stunde", "brent_usd"])
-
-@st.cache_data(ttl=600)
-def lade_brent_intraday_yahoo():
-    """
-    Holt Brent-Futures intraday (1h) direkt über den Yahoo Finance Chart Endpoint.
-    Keine zusätzlichen Dependencies; kann gelegentlich rate-limited sein.
-    """
-    try:
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-            )
-        }
-        urls = [
-            "https://query1.finance.yahoo.com/v8/finance/chart/BZ=F",
-            "https://query2.finance.yahoo.com/v8/finance/chart/BZ=F",
-        ]
-        for url in urls:
-            r = requests.get(url, params={"interval": "1h", "range": "7d"}, headers=headers, timeout=12)
-            data = r.json()
-            result = (data.get("chart") or {}).get("result") or []
-            if not result:
-                continue
-
-            res0 = result[0]
-            ts = res0.get("timestamp") or []
-            ind = ((res0.get("indicators") or {}).get("quote") or [{}])[0]
-            closes = ind.get("close") or []
-            if not ts or not closes or len(ts) != len(closes):
-                continue
-
-            df = pd.DataFrame({"stunde": pd.to_datetime(ts, unit="s"), "brent_usd": closes})
-            df["brent_usd"] = pd.to_numeric(df["brent_usd"], errors="coerce")
-            df = df.dropna().sort_values("stunde").reset_index(drop=True)
-            if not df.empty:
-                return df
-    except:
-        pass
-    return pd.DataFrame(columns=["stunde", "brent_usd"])
-
 @st.cache_data(ttl=900)
 def lade_brent_intraday_csv():
     try:
@@ -524,22 +434,9 @@ df_ext      = lade_preisverlauf()
 df_live_raw = lade_live_log()
 preis_live  = lade_aktueller_preis()
 df_prog_log = lade_prognose_log()
-df_brent_live = lade_brent_intraday_live()
-df_brent_yahoo = pd.DataFrame()
 df_brent_csv = lade_brent_intraday_csv()
-if df_brent_live.empty:
-    df_brent_yahoo = lade_brent_intraday_yahoo()
-
-if not df_brent_live.empty:
-    df_brent = df_brent_live
-    brent_source = "Twelve Data"
-elif not df_brent_yahoo.empty:
-    df_brent = df_brent_yahoo
-    brent_source = "Yahoo Finance (live)"
-else:
-    df_brent = df_brent_csv
-    has_td_key = bool(st.secrets.get("TWELVE_DATA_KEY") or os.getenv("TWELVE_DATA_KEY"))
-    brent_source = "CSV-Fallback (kein Twelve-Data-Key)" if not has_td_key else "CSV-Fallback (Twelve Data/Yahoo ohne Live-Daten)"
+df_brent = df_brent_csv
+brent_source = "CSV"
 df_brent_daily = lade_brent_daily()
 eur_usd_fx  = lade_eurusd()
 
@@ -744,13 +641,6 @@ with tab1:
         if not df_brent.empty:
             letzter_brent = pd.to_datetime(df_brent["stunde"]).max()
             st.caption(f"Brent-Quelle: {brent_source} · Letzter Stand: {letzter_brent.strftime('%d.%m.%Y %H:%M')}")
-            live_zeit = "—"
-            if not df_brent_live.empty:
-                live_zeit = pd.to_datetime(df_brent_live["stunde"]).max().strftime('%d.%m.%Y %H:%M')
-            elif not df_brent_yahoo.empty:
-                live_zeit = pd.to_datetime(df_brent_yahoo["stunde"]).max().strftime('%d.%m.%Y %H:%M')
-            csv_zeit = "—" if df_brent_csv.empty else pd.to_datetime(df_brent_csv["stunde"]).max().strftime('%d.%m.%Y %H:%M')
-            st.caption(f"Debug: Live-Zeit {live_zeit} · CSV-Zeit {csv_zeit}")
         else:
             st.caption(f"Brent-Quelle: {brent_source} · Keine Daten verfügbar")
 
