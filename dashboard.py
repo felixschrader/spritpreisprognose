@@ -307,13 +307,13 @@ def lade_eurusd():
     return 1.08
 
 @st.cache_data(ttl=3600)
-def generiere_empfehlung(preis, mean_ref, richtung_tage, brent_vs_3d, residuum):
+def generiere_empfehlung(preis, mean_ref, richtung_tage, brent_vs_3d_pct, residuum):
     prompt = f"""Du bist ein nüchterner Datenanalyst. Schreibe genau 2 Sätze auf Deutsch.
 
 Daten:
 - Aktueller Preis: {preis:.2f} € ({(preis - mean_ref)*100:+.1f} ct vs. Durchschnitt gestern)
 - Tages-Modell (Horizont 2 Tage): Richtung {richtung_tage}
-- Brent vs. 3-Tage-Mittel: {brent_vs_3d:+.2f} €/Barrel
+- Brent vs. 3-Tage-Mittel (Werktage): {brent_vs_3d_pct:+.1f} %
 - ARAL vs. NRW-Markt: {residuum:+.1f} Cent
 
 Regeln:
@@ -510,27 +510,31 @@ if df_yesterday.empty:
 else:
     mean_ref = float(df_yesterday["preis"].mean())
 
-# Brent-Referenz: Abweichung zum 3-Tage-Mittel (in EUR/Barrel)
+# Brent-Referenz: Prozent ggü. 3-Tage-Mittel (letzte 3 Werktage)
 brent_eur_aktuell = float(tages.get("brent_eur", np.nan))
 if np.isnan(brent_eur_aktuell) and not df_brent.empty:
     brent_eur_aktuell = float(df_brent.iloc[-1]["brent_usd"]) / eur_usd_fx
 
-if not df_brent_daily.empty and len(df_brent_daily) >= 3:
-    # Intraday-nahes 3-Tage-Mittel (letzte 72h) ist näher am Chart als reine Tages-Close-Werte.
-    if not df_brent.empty and len(df_brent) >= 24:
-        brent_3d_mean_eur = float(df_brent.tail(72)["brent_usd"].mean()) / eur_usd_fx
+if not df_brent_daily.empty:
+    df_bd = df_brent_daily.copy()
+    df_bd["wd"] = df_bd["tag"].dt.dayofweek
+    df_bd = df_bd[df_bd["wd"] < 5]
+    if len(df_bd) >= 3:
+        brent_3d_mean_eur = float(df_bd.tail(3)["brent_usd"].mean()) / eur_usd_fx
     else:
-        brent_3d_mean_eur = float(df_brent_daily.tail(3)["brent_usd"].mean()) / eur_usd_fx
+        brent_3d_mean_eur = brent_eur_aktuell
 else:
     brent_3d_mean_eur = brent_eur_aktuell
-brent_vs_3d = float(brent_eur_aktuell - brent_3d_mean_eur) if not np.isnan(brent_eur_aktuell) else 0.0
+brent_vs_3d_pct = float((brent_eur_aktuell / brent_3d_mean_eur - 1.0) * 100) if (
+    (not np.isnan(brent_eur_aktuell)) and brent_3d_mean_eur and brent_3d_mean_eur > 0
+) else 0.0
 
 # KI-Empfehlung
 try:
     ki_text = generiere_empfehlung(
         letzter_preis, mean_ref,
         richtung_tage,
-        brent_vs_3d, residuum_cent
+        brent_vs_3d_pct, residuum_cent
     )
 except:
     ki_text = tages.get("begruendung", "Keine Prognose verfügbar.")
@@ -576,10 +580,10 @@ delta_sign = "−" if delta_val < 0 else "+"
 
 if richtung_tage == "fällt":
     tend_pfeil, tend_cls = "↓", "tendenz-down"
-    tend_sub = f"Preis fällt bis morgen · {pred_delta_cent:+.1f} ct"
+    tend_sub = f"Preis fällt bis übermorgen · {pred_delta_cent:+.1f} ct"
 elif richtung_tage == "steigt":
     tend_pfeil, tend_cls = "↑", "tendenz-up"
-    tend_sub = f"Preis steigt bis morgen · {pred_delta_cent:+.1f} ct"
+    tend_sub = f"Preis steigt bis übermorgen · {pred_delta_cent:+.1f} ct"
 else:
     tend_pfeil, tend_cls = "→", "tendenz-flat"
     tend_sub = "Kein klares Signal"
@@ -596,7 +600,7 @@ st.markdown(f"""
         <div class="card-delta {delta_cls}">{delta_sign} {abs(delta_cent):.1f} ct vs. Ø gestern</div>
     </div>
     <div class="card">
-        <div class="card-title">Tages-Prognose · morgen</div>
+        <div class="card-title">Tages-Prognose · übermorgen</div>
         <div class="tendenz-val {tend_cls}">{tend_pfeil}</div>
         <div class="card-delta delta-blue">{tend_sub}</div>
     </div>
