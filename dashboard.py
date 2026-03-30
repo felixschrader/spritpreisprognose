@@ -862,13 +862,17 @@ with tab2:
     df_vol = df_ext_14.groupby("tag_v")["preis"].std().reset_index() if not df_ext_14.empty else pd.DataFrame(columns=["tag_v", "preis"])
     volatilitaet = float(df_vol["preis"].mean()) if not df_vol.empty else 0.0
 
-    # Morning-Spike vs Closing Abstand je Tag (Closing - Morning)
+    # Morning-Spike vs Closing Abstand je Tag (Closing - Morning), je Tag aus echten Tagespunkten
     df_mc = df_ext_14.copy()
     df_mc["stunde_h"] = df_mc["stunde"].dt.hour
     df_mc["tag"] = df_mc["stunde"].dt.date
-    df_morning = df_mc[df_mc["stunde_h"] == 6].groupby("tag")["preis"].mean().reset_index()
-    df_closing = df_mc[df_mc["stunde_h"] == 21].groupby("tag")["preis"].mean().reset_index()
-    df_mc_delta = df_morning.merge(df_closing, on="tag", suffixes=("_morning", "_closing"))
+    df_mc = df_mc.sort_values("stunde")
+    if not df_mc.empty:
+        df_morning = df_mc.groupby("tag").first().reset_index()[["tag", "preis"]].rename(columns={"preis": "preis_morning"})
+        df_closing = df_mc.groupby("tag").last().reset_index()[["tag", "preis"]].rename(columns={"preis": "preis_closing"})
+        df_mc_delta = df_morning.merge(df_closing, on="tag", how="inner")
+    else:
+        df_mc_delta = pd.DataFrame(columns=["tag", "preis_morning", "preis_closing"])
     if not df_mc_delta.empty:
         df_mc_delta["abstand_ct"] = (df_mc_delta["preis_closing"] - df_mc_delta["preis_morning"]) * 100
         avg_abstand_ct = float(df_mc_delta["abstand_ct"].mean())
@@ -904,21 +908,6 @@ with tab2:
         yaxis=dict(gridcolor="#F5F5F5", zeroline=False))
     st.plotly_chart(fig3, use_container_width=True)
 
-    # Morning-Spike vs. Closing Abstand (heute ausgeschlossen)
-    st.markdown('<div class="section-label">Abstand Closing − Morning-Spike (06h→21h) — täglich</div>',
-                unsafe_allow_html=True)
-    df_mc_delta["tag"] = pd.to_datetime(df_mc_delta["tag"])
-    fig4 = go.Figure()
-    fig4.add_trace(go.Scatter(
-        x=df_mc_delta["tag"], y=df_mc_delta["abstand_ct"],
-        mode="lines+markers", name="Closing − Morning",
-        line=dict(color="#6A1B9A", width=1.5), marker=dict(size=5),
-        fill="tozeroy", fillcolor="rgba(106,27,154,0.08)"
-    ))
-    fig4.update_layout(**BASE_L, height=220,
-        yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct"))
-    st.plotly_chart(fig4, use_container_width=True)
-
     # Volatilität (ganzer Tag, inkl. Morning-Spike)
     st.markdown('<div class="section-label">Tägliche Preisvolatilität — ganzer Tag</div>',
                 unsafe_allow_html=True)
@@ -931,6 +920,21 @@ with tab2:
     fig6_kpi.update_layout(**BASE_L, height=200,
         yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct"))
     st.plotly_chart(fig6_kpi, use_container_width=True)
+
+    # Morning-Spike vs. Closing Abstand (heute ausgeschlossen)
+    st.markdown('<div class="section-label">Abstand Closing − Morning-Spike — täglich</div>',
+                unsafe_allow_html=True)
+    df_mc_delta["tag"] = pd.to_datetime(df_mc_delta["tag"])
+    fig4 = go.Figure()
+    fig4.add_trace(go.Scatter(
+        x=df_mc_delta["tag"], y=df_mc_delta["abstand_ct"],
+        mode="lines+markers", name="Closing − Morning",
+        line=dict(color="#6A1B9A", width=1.5), marker=dict(size=5),
+        fill="tozeroy", fillcolor="rgba(106,27,154,0.08)"
+    ))
+    fig4.update_layout(**BASE_L, height=220,
+        yaxis=dict(gridcolor="#F5F5F5", zeroline=False, ticksuffix=" ct"))
+    st.plotly_chart(fig4, use_container_width=True)
 
 # ─── TAB 3: Modell-Performance ───────────────────────────────────────────────
 with tab3:
@@ -1110,8 +1114,8 @@ st.markdown(f"""
     Prognose täglich 09:00 UTC via GitHub Actions (Berlin: 10:00/11:00)<br>
     · <a href="https://github.com/felixschrader/spritpreisprognose" target="_blank">GitHub</a>
     · LinkedIn:
-    <a href="https://www.linkedin.com/search/results/all/?keywords=Felix%20Schrader" target="_blank">Felix Schrader</a>,
-    <a href="https://www.linkedin.com/search/results/all/?keywords=Girandoux%20Fandio%20Nganwajop" target="_blank">Girandoux Fandio Nganwajop</a>,
+    <a href="https://www.linkedin.com/in/felixschrader/" target="_blank">Felix Schrader</a>,
+    <a href="https://www.linkedin.com/in/girandoux-fandio-08628bb9/" target="_blank">Girandoux Fandio Nganwajop</a>,
     <a href="https://www.linkedin.com/search/results/all/?keywords=Ghislain%20Wamo" target="_blank">Ghislain Wamo</a><br>
     <a href="https://data-science-institute.de/" target="_blank">DSI — Data Science Institute by Fabian Rappert</a>
     · Capstone 2026
