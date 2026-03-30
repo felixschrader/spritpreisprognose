@@ -21,6 +21,7 @@ STATION_UUID = "e1aefc4e-3ca1-4018-8d91-455b69d35d41"
 # Referenzpunkt wie in tankerkoenig_pipeline.py (Köln · Aral Dürener Str. 407)
 STATION_LAT  = 50.919537
 STATION_LON  = 6.852624
+ARAL_STATION_URL = "https://tankstelle.aral.de/koeln/duerener-strasse-407/20185400"
 BASE_URL     = "https://raw.githubusercontent.com/felixschrader/spritpreisprognose/main"
 JSON_URL     = f"{BASE_URL}/data/ml/prognose_aktuell.json"
 TAGES_URL    = f"{BASE_URL}/data/ml/prognose_tagesbasis.json"
@@ -93,6 +94,12 @@ html, body, [class*="css"], .stApp {
     font-size: 1.1rem; color: rgba(255,255,255,0.92);
     margin-top: 6px;
 }
+.topbar-addr a {
+    color: rgba(255,255,255,0.98);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.topbar-addr a:hover { color: #FFFFFF; }
 .topbar-hours {
     margin-top: 10px;
     display: flex; flex-direction: column; gap: 3px;
@@ -249,6 +256,8 @@ html, body, [class*="css"], .stApp {
     font-size: 0.95rem; font-weight: 500; color: #616161;
     margin: 0.25rem 0 0.5rem 0;
 }
+.osm-map-title a { color: #1565C0; text-decoration: none; font-weight: 500; }
+.osm-map-title a:hover { text-decoration: underline; }
 
 /* SECTION LABEL */
 .section-label {
@@ -671,7 +680,7 @@ st.markdown(f"""
 <div class="topbar">
     <div class="topbar-left">
         <div class="topbar-title">Dieselpreisprognose</div>
-        <div class="topbar-addr">ARAL · Dürener Str. 407 · 50931 Köln-Lindenthal</div>
+        <div class="topbar-addr">ARAL · Dürener Str. 407 · 50931 Köln-Lindenthal · <a href="{ARAL_STATION_URL}" target="_blank" rel="noopener noreferrer">Tankstelle bei Aral</a></div>
         <div class="topbar-hours">{oeff_rows}</div>
     </div>
     <div class="topbar-right">
@@ -719,7 +728,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 st.markdown(
-    '<div class="osm-map-title">Standort · ARAL Dürener Str. 407</div>',
+    f'<div class="osm-map-title">Standort · ARAL Dürener Str. 407 · <a href="{ARAL_STATION_URL}" target="_blank" rel="noopener noreferrer">Aral Tankstelle</a></div>',
     unsafe_allow_html=True,
 )
 osm_standort_embed(STATION_LAT, STATION_LON)
