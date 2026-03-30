@@ -322,6 +322,35 @@ def lade_brent_intraday_live():
 
     return pd.DataFrame(columns=["stunde", "brent_usd"])
 
+@st.cache_data(ttl=600)
+def lade_brent_intraday_yahoo():
+    """
+    Holt Brent-Futures intraday (1h) direkt über den Yahoo Finance Chart Endpoint.
+    Keine zusätzlichen Dependencies; kann gelegentlich rate-limited sein.
+    """
+    try:
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/BZ=F"
+        params = {"interval": "1h", "range": "7d"}
+        r = requests.get(url, params=params, timeout=10)
+        data = r.json()
+        result = (data.get("chart") or {}).get("result") or []
+        if not result:
+            return pd.DataFrame(columns=["stunde", "brent_usd"])
+
+        res0 = result[0]
+        ts = res0.get("timestamp") or []
+        ind = ((res0.get("indicators") or {}).get("quote") or [{}])[0]
+        closes = ind.get("close") or []
+        if not ts or not closes or len(ts) != len(closes):
+            return pd.DataFrame(columns=["stunde", "brent_usd"])
+
+        df = pd.DataFrame({"stunde": pd.to_datetime(ts, unit="s"), "brent_usd": closes})
+        df["brent_usd"] = pd.to_numeric(df["brent_usd"], errors="coerce")
+        df = df.dropna().sort_values("stunde").reset_index(drop=True)
+        return df
+    except:
+        return pd.DataFrame(columns=["stunde", "brent_usd"])
+
 @st.cache_data(ttl=900)
 def lade_brent_intraday_csv():
     try:
@@ -485,13 +514,20 @@ df_live_raw = lade_live_log()
 preis_live  = lade_aktueller_preis()
 df_prog_log = lade_prognose_log()
 df_brent_live = lade_brent_intraday_live()
+df_brent_yahoo = pd.DataFrame()
+if df_brent_live.empty:
+    df_brent_yahoo = lade_brent_intraday_yahoo()
+
 if not df_brent_live.empty:
     df_brent = df_brent_live
     brent_source = "Twelve Data"
+elif not df_brent_yahoo.empty:
+    df_brent = df_brent_yahoo
+    brent_source = "Yahoo Finance (live)"
 else:
     df_brent = lade_brent_intraday_csv()
     has_td_key = bool(st.secrets.get("TWELVE_DATA_KEY") or os.getenv("TWELVE_DATA_KEY"))
-    brent_source = "CSV-Fallback (kein Twelve-Data-Key)" if not has_td_key else "CSV-Fallback (Twelve Data ohne Daten)"
+    brent_source = "CSV-Fallback (kein Twelve-Data-Key)" if not has_td_key else "CSV-Fallback (keine Live-Daten)"
 df_brent_daily = lade_brent_daily()
 eur_usd_fx  = lade_eurusd()
 
