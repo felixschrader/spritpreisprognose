@@ -526,6 +526,7 @@ preis_live  = lade_aktueller_preis()
 df_prog_log = lade_prognose_log()
 df_brent_live = lade_brent_intraday_live()
 df_brent_yahoo = pd.DataFrame()
+df_brent_csv = lade_brent_intraday_csv()
 if df_brent_live.empty:
     df_brent_yahoo = lade_brent_intraday_yahoo()
 
@@ -536,7 +537,7 @@ elif not df_brent_yahoo.empty:
     df_brent = df_brent_yahoo
     brent_source = "Yahoo Finance (live)"
 else:
-    df_brent = lade_brent_intraday_csv()
+    df_brent = df_brent_csv
     has_td_key = bool(st.secrets.get("TWELVE_DATA_KEY") or os.getenv("TWELVE_DATA_KEY"))
     brent_source = "CSV-Fallback (kein Twelve-Data-Key)" if not has_td_key else "CSV-Fallback (Twelve Data/Yahoo ohne Live-Daten)"
 df_brent_daily = lade_brent_daily()
@@ -743,6 +744,13 @@ with tab1:
         if not df_brent.empty:
             letzter_brent = pd.to_datetime(df_brent["stunde"]).max()
             st.caption(f"Brent-Quelle: {brent_source} · Letzter Stand: {letzter_brent.strftime('%d.%m.%Y %H:%M')}")
+            live_zeit = "—"
+            if not df_brent_live.empty:
+                live_zeit = pd.to_datetime(df_brent_live["stunde"]).max().strftime('%d.%m.%Y %H:%M')
+            elif not df_brent_yahoo.empty:
+                live_zeit = pd.to_datetime(df_brent_yahoo["stunde"]).max().strftime('%d.%m.%Y %H:%M')
+            csv_zeit = "—" if df_brent_csv.empty else pd.to_datetime(df_brent_csv["stunde"]).max().strftime('%d.%m.%Y %H:%M')
+            st.caption(f"Debug: Live-Zeit {live_zeit} · CSV-Zeit {csv_zeit}")
         else:
             st.caption(f"Brent-Quelle: {brent_source} · Keine Daten verfügbar")
 
