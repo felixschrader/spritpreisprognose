@@ -774,18 +774,20 @@ def lade_aktueller_preis():
 def lade_prognose_log():
     try:
         df = pd.read_csv(PROG_LOG_URL, parse_dates=["datum"])
+        # Tagesdatum immer auf 00:00 Uhr normieren (keine Sub-Tages-Zeiten aus der CSV)
+        df["datum"] = pd.to_datetime(df["datum"], errors="coerce").dt.floor("D")
         return df.sort_values("datum").reset_index(drop=True)
     except:
         return pd.DataFrame(columns=["datum", "predicted_delta", "actual_delta", "richtung_korrekt"])
 
 
 def _datum_berlin_tag(ser: pd.Series) -> pd.Series:
-    """Kalendertag in Europe/Berlin (CSV-Datum = deutscher Kalendertag, auch bei UTC in der Quelle)."""
-    ts = pd.to_datetime(ser)
+    """Kalendertag Europe/Berlin — Auswertungstag beginnt um 00:00 Uhr Ortszeit (kein UTC-Mitternachts-Off-by-one)."""
+    ts = pd.to_datetime(ser, errors="coerce")
     if ts.dt.tz is None:
-        ts = ts.dt.tz_localize(BERLIN, ambiguous="infer", nonexistent="shift_forward")
+        ts = ts.dt.floor("D").dt.tz_localize(BERLIN, ambiguous="infer", nonexistent="shift_forward")
     else:
-        ts = ts.dt.tz_convert(BERLIN)
+        ts = ts.dt.tz_convert(BERLIN).dt.floor("D")
     return ts.dt.normalize().dt.date
 
 @st.cache_data(ttl=900)
@@ -1573,10 +1575,11 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
     if df_prog_log.empty:
         st.info("Noch keine Log-Daten verfügbar.")
     else:
-        heute_dt = jetzt_ts.normalize()
-        heute_date = heute_dt.date()
-        gestern_date = (heute_dt - pd.Timedelta(days=1)).date()
-        start_laufende_woche = heute_dt - pd.Timedelta(days=heute_dt.dayofweek)
+        # Kalendertag & „gestern“ strikt nach Europe/Berlin (00:00 Uhr Tagesgrenze), unabhängig von jetzt_ts
+        heute_date = datetime.now(BERLIN).date()
+        gestern_date = heute_date - timedelta(days=1)
+        heute_dt = pd.Timestamp(datetime.combine(heute_date, datetime.min.time()))
+        start_laufende_woche = heute_dt - pd.Timedelta(days=int(heute_dt.dayofweek))
         # Letzte 3 vollständige Kalenderwochen (Mo–So), ohne laufende Woche
         first_day_3voll = start_laufende_woche - pd.Timedelta(weeks=3)
         last_day_3voll = start_laufende_woche - pd.Timedelta(days=1)
@@ -1588,7 +1591,7 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
         df_log_3w = df_pl[
             (df_pl["_tag"] >= d0) & (df_pl["_tag"] <= d1)
         ].copy().sort_values("datum")
-        min_14 = (heute_dt - pd.Timedelta(days=14)).date()
+        min_14 = heute_date - timedelta(days=14)
         df_log_14 = df_pl[df_pl["_tag"] >= min_14].copy().sort_values("datum")
 
         n_tage    = len(df_log_3w)
@@ -1758,7 +1761,8 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
             unsafe_allow_html=True,
         )
         if not df_log_14.empty:
-            x_14 = pd.to_datetime(df_log_14["_tag"].astype(str))
+            # Explizit Europe/Berlin, damit Plotly die Achse nicht als UTC-Mitternacht verschiebt
+            x_14 = pd.to_datetime(df_log_14["_tag"].astype(str)).dt.tz_localize(BERLIN)
             fig_perf = go.Figure()
             fig_perf.add_trace(go.Scatter(
                 x=x_14,
