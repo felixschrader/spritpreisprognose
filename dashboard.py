@@ -272,8 +272,57 @@ def lade_prognose_log():
     except:
         return pd.DataFrame(columns=["datum", "predicted_delta", "actual_delta", "richtung_korrekt"])
 
+@st.cache_data(ttl=600)
+def lade_brent_intraday_live():
+    """
+    Holt Brent-Futures intraday live via Twelve Data (1h).
+    Fallback wird außerhalb gemacht, wenn leer/Fehler.
+    """
+    try:
+        api_key = st.secrets.get("TWELVE_DATA_KEY")
+        if not api_key:
+            return pd.DataFrame(columns=["stunde", "brent_usd"])
+
+        # Twelve Data Symbol-Namen variieren je nach Datensatz.
+        # Wir probieren mehrere Kandidaten und nehmen den ersten, der liefert.
+        candidates = ["BZ=F", "BZ", "BRENT"]
+        base_url = "https://api.twelvedata.com/time_series"
+
+        for sym in candidates:
+            r = requests.get(
+                base_url,
+                params={
+                    "symbol": sym,
+                    "interval": "1h",
+                    "outputsize": 300,
+                    "apikey": api_key,
+                    "format": "JSON",
+                },
+                timeout=10,
+            )
+            data = r.json()
+            values = data.get("values")
+            if not isinstance(values, list) or len(values) == 0:
+                continue
+
+            df = pd.DataFrame(values)
+            if "datetime" not in df.columns:
+                continue
+
+            # Twelve Data liefert Strings; Close reicht für die Linie.
+            df = df.rename(columns={"datetime": "stunde", "close": "brent_usd"})
+            df["stunde"] = pd.to_datetime(df["stunde"], errors="coerce")
+            df["brent_usd"] = pd.to_numeric(df["brent_usd"], errors="coerce")
+            df = df[["stunde", "brent_usd"]].dropna().sort_values("stunde").reset_index(drop=True)
+            if not df.empty:
+                return df
+    except:
+        pass
+
+    return pd.DataFrame(columns=["stunde", "brent_usd"])
+
 @st.cache_data(ttl=900)
-def lade_brent_intraday():
+def lade_brent_intraday_csv():
     try:
         df = pd.read_csv(BRENT_1H_URL, parse_dates=["period"])
         df = df.rename(columns={"period": "stunde", "brent_futures_usd_1h": "brent_usd"})
@@ -434,7 +483,13 @@ df_ext      = lade_preisverlauf()
 df_live_raw = lade_live_log()
 preis_live  = lade_aktueller_preis()
 df_prog_log = lade_prognose_log()
-df_brent    = lade_brent_intraday()
+df_brent_live = lade_brent_intraday_live()
+if not df_brent_live.empty:
+    df_brent = df_brent_live
+    brent_source = "Twelve Data"
+else:
+    df_brent = lade_brent_intraday_csv()
+    brent_source = "CSV-Fallback"
 df_brent_daily = lade_brent_daily()
 eur_usd_fx  = lade_eurusd()
 
@@ -635,6 +690,12 @@ with tab1:
                 unsafe_allow_html=True)
     st.caption("Darstellung in 3h-Bins · Nur Öffnungszeiten (Mo–Fr 06–22h, Sa 07–22h, So 08–22h)")
     show_brent = st.toggle("Brent-Preis anzeigen", value=False, key="show_brent_line")
+    if show_brent:
+        if not df_brent.empty:
+            letzter_brent = pd.to_datetime(df_brent["stunde"]).max()
+            st.caption(f"Brent-Quelle: {brent_source} · Letzter Stand: {letzter_brent.strftime('%d.%m.%Y %H:%M')}")
+        else:
+            st.caption(f"Brent-Quelle: {brent_source} · Keine Daten verfügbar")
 
     # 3h-Bins für historischen Verlauf
     df_hist_bin = df_hist.copy()
@@ -647,7 +708,7 @@ with tab1:
     aktueller_bin_ende = aktueller_bin_start + pd.Timedelta(hours=3)
     fig.add_trace(go.Scatter(
         x=df_hist_bin["stunde"], y=df_hist_bin["preis"],
-        mode="lines", name="Preisverlauf (3h-Bin)",
+        mode="lines", name="Preisverlauf Diesel",
         line=dict(color="#BDBDBD", width=1.5, shape="hv"),
     ))
 
@@ -661,7 +722,7 @@ with tab1:
                 x=df_brent_plot["stunde"],
                 y=df_brent_plot["brent_eur"],
                 mode="lines",
-                name="Brent (EUR/Barrel)",
+                name="Brent in Euro pro Barrel",
                 yaxis="y2",
                 line=dict(color="#2E7D32", width=1.3),
             ))
@@ -775,11 +836,20 @@ with tab1:
                    tickfont=dict(size=13, color="#9E9E9E"),
                    gridcolor="#F5F5F5", showline=True, linecolor="#E0E0E0", zeroline=False),
         xaxis_rangeslider_visible=False,
-        yaxis=dict(tickfont=dict(size=13, color="#9E9E9E"), gridcolor="#F5F5F5",
-                   zeroline=False, ticksuffix=" €", title=None),
+        yaxis=dict(
+            tickfont=dict(size=13, color="#9E9E9E"),
+            gridcolor="#F5F5F5",
+            zeroline=False,
+            ticksuffix=" €",
+            tickformat=".2f",
+            title="Preisverlauf Diesel"
+        ),
         yaxis2=dict(
             overlaying="y", side="right", showgrid=False, zeroline=False,
-            tickfont=dict(size=12, color="#8D6E63"), ticksuffix=" €"
+            tickfont=dict(size=12, color="#8D6E63"),
+            ticksuffix=" €",
+            tickformat=".2f",
+            title="Brent in Euro pro Barrel"
         ),
         legend=dict(orientation="h", y=-0.18, font=dict(size=13, color="#757575"),
                     bgcolor="rgba(0,0,0,0)"),
