@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 import requests
 from datetime import datetime, timedelta
 import pytz
+import os
 
 st.set_page_config(
     page_title="Dieselpreis · Köln",
@@ -279,7 +280,7 @@ def lade_brent_intraday_live():
     Fallback wird außerhalb gemacht, wenn leer/Fehler.
     """
     try:
-        api_key = st.secrets.get("TWELVE_DATA_KEY")
+        api_key = st.secrets.get("TWELVE_DATA_KEY") or os.getenv("TWELVE_DATA_KEY")
         if not api_key:
             return pd.DataFrame(columns=["stunde", "brent_usd"])
 
@@ -489,7 +490,8 @@ if not df_brent_live.empty:
     brent_source = "Twelve Data"
 else:
     df_brent = lade_brent_intraday_csv()
-    brent_source = "CSV-Fallback"
+    has_td_key = bool(st.secrets.get("TWELVE_DATA_KEY") or os.getenv("TWELVE_DATA_KEY"))
+    brent_source = "CSV-Fallback (kein Twelve-Data-Key)" if not has_td_key else "CSV-Fallback (Twelve Data ohne Daten)"
 df_brent_daily = lade_brent_daily()
 eur_usd_fx  = lade_eurusd()
 
