@@ -119,26 +119,13 @@ def ensure_session_id() -> str:
     return st.session_state.visitor_session_id
 
 
-def init_page_and_first_tab(tab_labels) -> None:
-    """Einmal pro Session: page_view + tab_view für den aktuell gewählten Bereich."""
+def init_page_view() -> None:
+    """Einmal pro Session: page_view (Tab-Wechsel bei st.tabs nicht zuverlässig serverseitig erfassbar)."""
     import streamlit as st
 
     sid = ensure_session_id()
     if st.session_state.get("visitor_page_logged"):
         return
     ensure_table()
-    tab = st.session_state.get("dash_tab_sel", tab_labels[0] if tab_labels else "")
     record_event(sid, "page_view")
-    if tab:
-        record_event(sid, "tab_view", tab_name=tab)
     st.session_state.visitor_page_logged = True
-
-
-def on_tab_change() -> None:
-    """Bei jedem Wechsel des Bereichs-Radios."""
-    import streamlit as st
-
-    sid = ensure_session_id()
-    tab = st.session_state.get("dash_tab_sel")
-    if tab:
-        record_event(sid, "tab_view", tab_name=tab)

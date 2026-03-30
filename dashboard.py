@@ -662,39 +662,7 @@ button.topbar-refresh {
 .tag-datum  { font-size: 0.82rem; font-weight: 600; }
 .tag-delta  { font-size: 0.8rem; }
 
-/* Bereichs-Radio (horizontal) — optisch wie segmentierte Tabs */
-div[data-testid="stRadio"] > div[role="radiogroup"] {
-    background-color: #E4E9F2 !important;
-    border-radius: 12px !important;
-    padding: 5px !important;
-    gap: 4px !important;
-    border: none !important;
-    box-shadow: inset 0 1px 2px rgba(16, 24, 40, 0.06);
-    flex-wrap: wrap;
-}
-div[data-testid="stRadio"] > div[role="radiogroup"] label {
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
-    font-size: 1.02rem !important;
-    font-weight: 600 !important;
-    padding: 0.6rem 1.1rem !important;
-    border-radius: 9px !important;
-    color: var(--text-secondary) !important;
-    border: none !important;
-    margin: 0 !important;
-    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease !important;
-}
-div[data-testid="stRadio"] > div[role="radiogroup"] label:hover {
-    color: var(--brand-dark) !important;
-    background: rgba(255,255,255,0.55) !important;
-}
-div[data-testid="stRadio"] > div[role="radiogroup"] label[data-baseweb="radio"] div[role="radio"][aria-checked="true"],
-div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) {
-    background-color: #FFFFFF !important;
-    color: var(--brand) !important;
-    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 2px 8px rgba(16, 24, 40, 0.06) !important;
-}
-
-/* TABS — segmentiert, ruhig (falls woanders noch Tabs genutzt werden) */
+/* TABS — segmentiert, ruhig */
 .stTabs [data-baseweb="tab-list"] {
     background-color: #E4E9F2 !important;
     border-radius: 12px !important;
@@ -761,18 +729,22 @@ div[data-testid="stRadio"] > div[role="radiogroup"] label:has(input:checked) {
 """, unsafe_allow_html=True)
 
 # ── Daten laden ───────────────────────────────────────────────────────────────
-@st.cache_data(ttl=300)
-def lade_prognose():
-    return requests.get(JSON_URL, timeout=10).json()
+# Kurze TTL + no-cache: nach GitHub-Push schnell sichtbar (ohne auf den 5-Min-Block warten).
+_HTTP_NO_CACHE = {"Cache-Control": "no-cache", "Pragma": "no-cache"}
 
-@st.cache_data(ttl=300)
+
+@st.cache_data(ttl=60)
+def lade_prognose():
+    return requests.get(JSON_URL, timeout=10, headers=_HTTP_NO_CACHE).json()
+
+@st.cache_data(ttl=60)
 def lade_tagesprognose():
     try:
-        return requests.get(TAGES_URL, timeout=10).json()
+        return requests.get(TAGES_URL, timeout=10, headers=_HTTP_NO_CACHE).json()
     except:
         return {}
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=120)
 def lade_preisverlauf():
     df = pd.read_parquet(PARQUET_URL)
     df = df[df["station_uuid"] == STATION_UUID].copy()
@@ -851,23 +823,25 @@ def _richtung_laien(richtung_tage: str) -> str:
 
 
 @st.cache_data(ttl=3600)
-def generiere_empfehlung(preis, mean_ref, richtung_tage, brent_vs_3d_pct):
+def generiere_empfehlung(preis, mean_ref, richtung_tage, brent_vs_3d_pct, _prompt_version: int = 2):
     r_plain = _richtung_laien(richtung_tage)
-    prompt = f"""Du bist ein nüchterner Datenanalyst. Schreibe genau 2 vollständige Sätze auf Deutsch — für allgemeine Leser, ohne Fachjargon.
+    prompt = f"""Du bist ein Datenanalyst. Schreibe genau 2 vollständige Sätze auf Deutsch — sachlich und etwas präziser als Alltagssmalltalk, aber für Laien verständlich (kein Fach-Kauderwelsch).
 
-Interne Daten (nicht wörtlich ausgeben, keine Fachbegriffe aus diesem Block übernehmen):
-- Dieselpreis an dieser Tankstelle jetzt: {preis:.2f} Euro; Abstand zum Mittelwert von gestern (gleiche Station): {(preis - mean_ref)*100:+.1f} Cent
+Interne Daten (Inhalt nutzen, nicht Satz für Satz abschreiben):
+- Dieselpreis an dieser Tankstelle jetzt: {preis:.2f} Euro; Abstand zum Tagesmittel von gestern (gleiche Station): {(preis - mean_ref)*100:+.1f} Cent
 - Prognosemodell (intern): grobe Richtung {r_plain}
-- Brent-Rohöl: {brent_vs_3d_pct:+.1f} Prozent gegenüber dem Drei-Tage-Mittel der letzten Werktage
+- Brent: {brent_vs_3d_pct:+.1f} Prozent gegenüber dem Drei-Tage-Mittel der letzten Werktage (Referenzgröße)
 
 Regeln für den sichtbaren Text:
 - Keine Handlungsempfehlung, kein „tanken“, kein „warten“
-- Kein Regionalvergleich (kein NRW, kein Landesmittel), keine anderen Tankstellen
-- Keine Fachbegriffe wie Kernpreis, Delta, Horizont, Pipeline, Futures, Spot — einfaches Deutsch
-- Satz 1: aktueller Preis und Abstand zum Mittel von gestern (mit Zahlen)
-- Satz 2: muss die Brent-Entwicklung (Prozent) und die grobe Richtung aus dem Modell (steigend/fallend/eher seitwärts) nennen
-- Keine Hinweise auf fehlende Daten oder Unsicherheit
-- Maximal 40 Wörter gesamt, kein Konjunktiv, keine abgebrochenen Sätze"""
+- Kein Regionalvergleich, keine anderen Tankstellen
+- Vermeide: Kernpreis, Delta, Horizont, Pipeline, Spot (als Fachwort)
+- Satz 1: aktueller Literpreis und Abstand zum Mittel von gestern (mit Zahlen)
+- Satz 2: **Brent** beim Namen nennen (nicht „Rohöl“ schreiben). Den Markt **über Preis/Notierung** formulieren, z. B. „der Preis für Brent …“ oder „die Brent-Notierung … im Vergleich zu …“ — **nicht** „das Rohöl steigt/fällt“.
+- Satz 2 muss außerdem die Prozent-Bewegung und die grobe Modellrichtung (steigend/fallend/eher seitwärts) einordnen
+- Ton: nicht platt oder kindlich; kein Konjunktiv, keine abgebrochenen Sätze
+- Keine Hinweise auf fehlende Daten
+- Maximal 45 Wörter gesamt"""
 
     r = requests.post(
         "https://api.anthropic.com/v1/messages",
@@ -1224,22 +1198,12 @@ st.markdown(
 osm_standort_embed(STATION_LAT, STATION_LON)
 
 TAB_LABELS = ["Preisverlauf", "KPIs", "Modell-Performance"]
-if "dash_tab_sel" not in st.session_state:
-    st.session_state.dash_tab_sel = TAB_LABELS[0]
+visitor_stats.init_page_view()
 
-visitor_stats.init_page_and_first_tab(TAB_LABELS)
-
-sel_tab = st.radio(
-    "Bereich",
-    TAB_LABELS,
-    horizontal=True,
-    label_visibility="collapsed",
-    key="dash_tab_sel",
-    on_change=visitor_stats.on_tab_change,
-)
+tab_pv, tab_kpi, tab_perf = st.tabs(TAB_LABELS)
 
 # ─── TAB 1: Preisverlauf ─────────────────────────────────────────────────────
-if sel_tab == TAB_LABELS[0]:
+with tab_pv:
     st.markdown('<div class="section-label">Preisverlauf — 7 Tage + Prognose bis morgen</div>',
                 unsafe_allow_html=True)
     show_brent = st.toggle("Brent-Preis anzeigen", value=False, key="show_brent_line")
@@ -1359,7 +1323,7 @@ if sel_tab == TAB_LABELS[0]:
         ]).reset_index(drop=True)
         fig.add_trace(go.Scatter(
             x=df_prog_plot["stunde"], y=df_prog_plot["preis"],
-            mode="lines", name="Prognose (Modell → morgen)",
+            mode="lines", name="Prognose",
             line=dict(color="#E65100", width=2, shape="hv", dash="dot"),
         ))
 
@@ -1414,24 +1378,25 @@ if sel_tab == TAB_LABELS[0]:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-elif sel_tab == TAB_LABELS[1]:
+with tab_kpi:
     st.markdown('<div class="section-label">Analyse — letzte 14 Tage (ohne heute)</div>',
                 unsafe_allow_html=True)
 
-    cutoff_14d = jetzt_ts.normalize() - pd.Timedelta(days=14)
     heute_datum = jetzt_ts.normalize().date()
     tag_letzter = heute_datum - timedelta(days=1)
-    # Einheitlicher Zeitraum für alle drei Tages-Charts (nur Datum, gleicher Start)
-    cutoff_kpi = pd.Timestamp(cutoff_14d).normalize()
+    # Letzte 14 Kalendertage bis einschließlich gestern (14 verschiedene Daten)
     tag_end_ts = pd.Timestamp(tag_letzter).normalize()
+    cutoff_kpi = tag_end_ts - pd.Timedelta(days=13)
+    cutoff_14d = cutoff_kpi
 
     # Nur vollständige Tage (heute ausgeschlossen)
     df_14 = df_hist[
         (df_hist["stunde"] >= cutoff_14d) &
         (df_hist["stunde"].dt.date < heute_datum)
     ].copy().sort_values("stunde")
-    df_14["delta"]    = df_14["preis"].diff()
-    df_14["tag"]      = df_14["stunde"].dt.date
+    df_14["tag"] = df_14["stunde"].dt.date
+    # Delta nur innerhalb eines Kalendertags (sonst verbindet diff() den letzten Wert vom Vortag)
+    df_14["delta"] = df_14.groupby("tag", group_keys=False)["preis"].diff()
     df_14["stunde_h"] = df_14["stunde"].dt.hour
 
     aend_tag = df_14.groupby("tag")["delta"].count().mean() if not df_14.empty else 0.0
@@ -1497,12 +1462,18 @@ elif sel_tab == TAB_LABELS[1]:
                   margin=dict(l=10, r=10, t=10, b=10),
                   legend=dict(orientation="h", y=-0.35, font=dict(size=12)))
 
+    _kpi_tick_vals = alle_kpi_tage.tolist()
+    _kpi_tick_txt = [pd.Timestamp(t).strftime("%d.%m.") for t in _kpi_tick_vals]
     kpi_xaxis = dict(
         type="date",
         gridcolor="#F5F5F5",
-        tickformat="%d.%m.",
-        dtick=86400000.0,
-        range=[cutoff_kpi, tag_end_ts + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)],
+        tickmode="array",
+        tickvals=_kpi_tick_vals,
+        ticktext=_kpi_tick_txt,
+        range=[
+            cutoff_kpi - pd.Timedelta(hours=6),
+            tag_end_ts + pd.Timedelta(days=1) - pd.Timedelta(seconds=1),
+        ],
         hoverformat="%d.%m.%Y",
     )
 
@@ -1560,7 +1531,7 @@ elif sel_tab == TAB_LABELS[1]:
         xaxis=kpi_xaxis)
     st.plotly_chart(fig4, use_container_width=True)
 
-elif sel_tab == TAB_LABELS[2]:
+with tab_perf:
     st.markdown('<div class="section-label">Retrograde Bewertung — Tages-Prognose</div>',
                 unsafe_allow_html=True)
     st.caption("""**Zielvariable:** Δ gleitender 3-Tage-Kernpreis, Horizont 2 Tage.
@@ -1582,9 +1553,36 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
         ].copy().sort_values("datum")
         df_log_14 = df_prog_log[df_prog_log["datum"] >= (heute_dt - pd.Timedelta(days=14))].copy().sort_values("datum")
 
-        # Prognose-Trefferquote (Kalender) — direkt unter Retrograde-Intro
+        n_tage    = len(df_log_3w)
+        n_korrekt = int(df_log_3w["richtung_korrekt"].sum()) if n_tage > 0 else 0
+        acc_3w    = df_log_3w["richtung_korrekt"].mean() * 100 if n_tage > 0 else 0
+        mae_3w    = df_log_3w["actual_delta"].sub(
+            df_log_3w["predicted_delta"]).abs().mean() * 100 if n_tage > 0 else 0
+
+        st.markdown(f"""
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-val">{acc_3w:.1f}<span style="font-size:0.75rem">%</span></div>
+                <div class="kpi-lbl">Richtungs-Acc. (3W)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-val">{n_korrekt}/{n_tage}</div>
+                <div class="kpi-lbl">Korrekt / 3W</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-val">{mae_3w:.2f}<span style="font-size:0.75rem"> ct</span></div>
+                <div class="kpi-lbl">MAE (3W)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-val">67.9<span style="font-size:0.75rem">%</span></div>
+                <div class="kpi-lbl">Acc. Test-Set</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Prognose-Trefferquote (Kalender)
         st.markdown(
-            '<div class="section-label section-label-priority">Prognose-Trefferquote — letzte 3 vollständige Wochen</div>',
+            '<div class="section-label">Prognose-Trefferquote — letzte 3 vollständige Wochen</div>',
             unsafe_allow_html=True,
         )
         st.caption(
@@ -1654,33 +1652,6 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
                 woche_html += '<div class="tag-kachel leer"></div>'
             woche_html += "</div>"
             st.markdown(woche_html, unsafe_allow_html=True)
-
-        n_tage    = len(df_log_3w)
-        n_korrekt = int(df_log_3w["richtung_korrekt"].sum()) if n_tage > 0 else 0
-        acc_3w    = df_log_3w["richtung_korrekt"].mean() * 100 if n_tage > 0 else 0
-        mae_3w    = df_log_3w["actual_delta"].sub(
-            df_log_3w["predicted_delta"]).abs().mean() * 100 if n_tage > 0 else 0
-
-        st.markdown(f"""
-        <div class="kpi-grid">
-            <div class="kpi-card">
-                <div class="kpi-val">{acc_3w:.1f}<span style="font-size:0.75rem">%</span></div>
-                <div class="kpi-lbl">Richtungs-Acc. (3W)</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-val">{n_korrekt}/{n_tage}</div>
-                <div class="kpi-lbl">Korrekt / 3W</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-val">{mae_3w:.2f}<span style="font-size:0.75rem"> ct</span></div>
-                <div class="kpi-lbl">MAE (3W)</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-val">67.9<span style="font-size:0.75rem">%</span></div>
-                <div class="kpi-lbl">Acc. Test-Set</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
 
         # Wöchentliche Trefferquote: 3 letzte vollständige Wochen (Mo–So), Schlüssel = Wochenende So.
         sonntage_3voll = pd.to_datetime([
@@ -1802,12 +1773,15 @@ st.markdown(f"""
         <p><strong>Prognose &amp; Übersicht:</strong>
         Das Modell nutzt den <strong>letzten abgeschlossenen Kerntag</strong> (in der Regel <strong>gestern</strong>). Die Pfeil-Richtung gilt für die <strong>Kernpreis-Ebene</strong> (gleitender 3-Tage-Kernpreis im Training), nicht für den Spot-Cent gegenüber „jetzt“.
         Die <strong>orange Linie</strong> im Chart setzt die Modell-<strong>Richtung</strong> für den <strong>nächsten Öffnungstag</strong> so um, dass pro Uhrzeit-Bin der Abstand zwischen <strong>Kernpreis (P10, 13–20 Uhr)</strong> und <strong>Tageshoch</strong> wie gestern skaliert wird — nicht über das Min/Max der 3h-Bins.</p>
-        <p><strong>Tägliche Aktualisierung:</strong> automatisch (GitHub Actions). <strong>10:00 Uhr</strong> = typische Uhrzeit in Deutschland (<abbr title="Mitteleuropäische Zeit">MEZ</abbr>); der Rechner startet um <strong>09:00 UTC</strong> (<abbr title="Coordinated Universal Time, Weltzeit">UTC</abbr>).</p>
+        <p><strong>Daten-Updates (GitHub Actions):</strong>
+        Die <strong>Kurzprognose</strong> wird <strong>stündlich</strong> erzeugt.
+        Die <strong>Tagesprognose</strong> (Modellrichtung, orange Linie) wird <strong>einmal täglich</strong> um <strong>09:00&nbsp;UTC</strong> gebaut (z.&nbsp;B. <strong>10:00&nbsp;Uhr MEZ</strong>); dazwischen gibt es dafür oft <strong>keinen neuen Stand</strong> auf GitHub.
+        <strong>„Aktualisieren“</strong> im Dashboard leert nur den App-Cache. Wenn die Tageswerte „hängen“, die Action im Repo unter <em>Actions → Run workflow</em> manuell starten oder auf den nächsten Lauf warten.</p>
         <p><strong>Technik:</strong>
         ML-Stack: scikit-learn (Random Forest wie im ersten Absatz). Daten: Tankerkönig / MTS-K; tägliche Pipeline über GitHub Actions; Dashboard auf Streamlit Community Cloud; Standortkarte mit OpenStreetMap (Leaflet). Weitere technische Details und Repo-Aufbau: <a href="https://github.com/felixschrader/spritpreisprognose" target="_blank" rel="noopener noreferrer">README im GitHub-Repository</a>.</p>
         <p><strong>KI bei der Entwicklung:</strong>
         <a href="https://cursor.com" target="_blank" rel="noopener noreferrer">Cursor</a> (Editor) und <a href="https://www.anthropic.com/claude-code" target="_blank" rel="noopener noreferrer">Claude Code</a> wurden unterstützend genutzt — z.&nbsp;B. für Code-Entwurf, Refactoring und Erklärungen im Projekt. Fachliche Entscheidungen, Tests und die Verantwortung für das Ergebnis liegen beim Team.</p>
-        <p><strong>KI-Text:</strong> der Kurztext darüber wird mit <a href="https://www.anthropic.com" target="_blank" rel="noopener noreferrer">Claude</a> aus Preis, Mittelwert gestern, Modellrichtung und Brent formuliert — für Laien, ohne Regionalvergleich.</p>
+        <p><strong>KI-Text:</strong> der Kurztext darüber wird mit <a href="https://www.anthropic.com" target="_blank" rel="noopener noreferrer">Claude</a> aus Preis, Mittelwert gestern, Modellrichtung und Brent-Referenz formuliert (Brent als Marktbegriff, ohne Regionalvergleich).</p>
         <p>Dieses Projekt entstand im Rahmen der sechsmonatigen Weiterbildung Data Science; die Abschlussarbeit wurde in der Zeit vom 16. bis 27. März 2026 erstellt.
         Es wendet erlernte Tools und Denkweisen bewusst in der Praxis an.
         Das Dashboard ist ein MVP im Sinne eines Prototyps und offen für eine Weiterentwicklung, die weitere Zusammenhänge in der Preisfindung von Kraftstoffpreisen einbeziehen kann.</p>
