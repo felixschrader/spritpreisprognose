@@ -238,6 +238,10 @@ html, body, [class*="css"], .stApp {
 }
 .page-footer a { color: #616161; text-decoration: none; }
 .page-footer a:hover { text-decoration: underline; }
+.page-footer .footer-context {
+    margin-top: 0.85rem; margin-bottom: 0.35rem;
+    font-size: 0.85rem; line-height: 1.65; color: #616161;
+}
 
 @media (max-width: 640px) {
     .metric-grid { grid-template-columns: 1fr; }
@@ -1165,6 +1169,11 @@ st.markdown(f"""
     <a href="https://www.linkedin.com/in/felixschrader/" target="_blank">Felix Schrader</a>,
     <a href="https://www.linkedin.com/in/girandoux-fandio-08628bb9/" target="_blank">Girandoux Fandio Nganwajop</a>,
     <a href="https://www.linkedin.com/search/results/all/?keywords=Ghislain%20Wamo" target="_blank">Ghislain Wamo</a><br>
+    <div class="footer-context">
+        Dieses Projekt entstand im Rahmen der sechsmonatigen Weiterbildung Data Science; die Abschlussarbeit wurde in der Zeit vom 16. bis 27. März 2026 erstellt.
+        Es wendet erlernte Tools und Denkweisen bewusst in der Praxis an.
+        Das Dashboard ist ein MVP im Sinne eines Prototyps und offen für eine Weiterentwicklung, die weitere Zusammenhänge in der Preisfindung von Kraftstoffpreisen einbeziehen kann.
+    </div>
     <a href="https://data-science-institute.de/" target="_blank">DSI — Data Science Institute by Fabian Rappert</a>
     · Capstone 2026
 </div>
