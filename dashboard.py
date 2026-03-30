@@ -745,29 +745,30 @@ with tab1:
     if not df_brent.empty:
         df_brent_plot = df_brent[df_brent["stunde"] >= cutoff_7d].copy()
         if not df_brent_plot.empty:
-            # Wochenenden ausblenden und Linien über größere Lücken (z.B. Fr->Mo) trennen.
-            df_brent_plot = df_brent_plot[df_brent_plot["stunde"].dt.dayofweek < 5].copy()
             df_brent_plot = df_brent_plot.sort_values("stunde").reset_index(drop=True)
             df_brent_plot["brent_eur"] = df_brent_plot["brent_usd"] / eur_usd_fx
             if not df_brent_plot.empty:
-                x_brent, y_brent = [], []
-                prev_ts = None
-                for _, row in df_brent_plot.iterrows():
-                    ts = row["stunde"]
-                    val = row["brent_eur"]
-                    if prev_ts is not None and (ts - prev_ts) > pd.Timedelta(hours=3):
-                        x_brent.append(None)
-                        y_brent.append(None)
-                    x_brent.append(ts)
-                    y_brent.append(val)
-                    prev_ts = ts
+                is_weekend = df_brent_plot["stunde"].dt.dayofweek >= 5
+                y_weekday = df_brent_plot["brent_eur"].where(~is_weekend)
+                y_weekend = df_brent_plot["brent_eur"].where(is_weekend)
 
+                # Hauptlinie: Wochentage in Grün
                 fig.add_trace(go.Scatter(
-                    x=x_brent, y=y_brent,
+                    x=df_brent_plot["stunde"], y=y_weekday,
                     mode="lines", name="Brent (EUR/Barrel)",
-                    line=dict(color="#6D4C41", width=1.2),
+                    line=dict(color="#2E7D32", width=1.5),
                     yaxis="y2",
                     connectgaps=False,
+                ))
+                # Wochenende dezent grau/transparenter statt ausgeblendet
+                fig.add_trace(go.Scatter(
+                    x=df_brent_plot["stunde"], y=y_weekend,
+                    mode="lines", name="Brent (Wochenende)",
+                    line=dict(color="#9E9E9E", width=1.2, dash="dot"),
+                    opacity=0.45,
+                    yaxis="y2",
+                    connectgaps=False,
+                    showlegend=False,
                 ))
     # Aktuellen Bin bis zum rechten Rand "schließen" und dort auf den Live-Preis springen.
     df_bin_now = df_hist_bin[df_hist_bin["stunde"] <= aktueller_bin_start]
