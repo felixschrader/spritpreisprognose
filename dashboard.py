@@ -20,6 +20,12 @@ STATION_UUID = "e1aefc4e-3ca1-4018-8d91-455b69d35d41"
 # Referenzpunkt wie in tankerkoenig_pipeline.py (Köln · Aral Dürener Str. 407)
 STATION_LAT  = 50.919537
 STATION_LON  = 6.852624
+# Kölner Dom (Domplatte, grobe Referenz)
+KOELNER_DOM_LAT = 50.9413
+KOELNER_DOM_LON = 6.9583
+# Kartenmittelpunkt: halbe Strecke Tankstelle ↔ Dom (Marker bleibt auf der Tankstelle)
+MAP_VIEW_LAT = (STATION_LAT + KOELNER_DOM_LAT) / 2.0
+MAP_VIEW_LON = (STATION_LON + KOELNER_DOM_LON) / 2.0
 ARAL_STATION_URL = "https://tankstelle.aral.de/koeln/duerener-strasse-407/20185400"
 # Leaflet: fester Zoom bei jedem Laden (kein fitBounds)
 MAP_INITIAL_ZOOM = 16
@@ -55,6 +61,7 @@ def osm_standort_embed(
 ) -> None:
     """OpenStreetMap über Leaflet: fester Zoom, Marker, Vollbild-Button."""
     z = int(zoom)
+    vlat, vlon = MAP_VIEW_LAT, MAP_VIEW_LON
     html = f"""
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 <style>
@@ -82,7 +89,7 @@ def osm_standort_embed(
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
 (function() {{
-  var lat = {lat}, lon = {lon}, zoom = {z}, mapH = {height};
+  var mlat = {lat}, mlon = {lon}, vlat = {vlat}, vlon = {vlon}, zoom = {z}, mapH = {height};
   function invalidate(m) {{ if (m) {{ setTimeout(function() {{ m.invalidateSize(true); }}, 50); }} }}
   function init() {{
     var el = document.getElementById('osm-leaflet-map');
@@ -90,11 +97,11 @@ def osm_standort_embed(
     var map = L.map('osm-leaflet-map', {{
       zoomControl: true, scrollWheelZoom: true, attributionControl: false
     }});
-    map.setView([lat, lon], zoom, {{ animate: false }});
+    map.setView([vlat, vlon], zoom, {{ animate: false }});
     L.tileLayer('https://tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
       maxZoom: 19, attribution: ''
     }}).addTo(map);
-    L.marker([lat, lon]).addTo(map);
+    L.marker([mlat, mlon]).addTo(map);
     var fsRoot = document.getElementById('osm-leaflet-fs');
     var btn = document.getElementById('osm-fs-btn');
     btn.addEventListener('click', function() {{
