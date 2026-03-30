@@ -552,6 +552,8 @@ with tab1:
     df_hist_bin = df_hist_bin.rename(columns={"stunde_bin": "stunde"})
 
     fig = go.Figure()
+    aktueller_bin_start = jetzt_ts.floor("3h")
+    aktueller_bin_ende = aktueller_bin_start + pd.Timedelta(hours=3)
     fig.add_trace(go.Scatter(
         x=df_hist_bin["stunde"], y=df_hist_bin["preis"],
         mode="lines", name="Preisverlauf (3h-Bin)",
@@ -628,10 +630,11 @@ with tab1:
 
     # Prognose-Linie (3h-Bins, bis Mitternacht übermorgen)
     if not df_prognose_bin.empty:
-        # Verbindungspunkt: aktueller Preis
+        # Verbindungspunkt: aktueller Preis am rechten Rand des aktuellen 3h-Bins
+        df_prog_future = df_prognose_bin[df_prognose_bin["stunde"] >= aktueller_bin_ende].copy()
         df_prog_plot = pd.concat([
-            pd.DataFrame([{"stunde": jetzt_ts, "preis": letzter_preis}]),
-            df_prognose_bin
+            pd.DataFrame([{"stunde": aktueller_bin_ende, "preis": letzter_preis}]),
+            df_prog_future
         ]).reset_index(drop=True)
         fig.add_trace(go.Scatter(
             x=df_prog_plot["stunde"], y=df_prog_plot["preis"],
@@ -639,9 +642,9 @@ with tab1:
             line=dict(color="#E65100", width=2, shape="hv", dash="dot"),
         ))
 
-    # Aktueller Zeitpunkt
+    # Aktueller Preis als Punkt am Bin-Ende (sauberer Übergang zur Prognose)
     fig.add_trace(go.Scatter(
-        x=[jetzt_ts], y=[letzter_preis],
+        x=[aktueller_bin_ende], y=[letzter_preis],
         mode="markers", showlegend=False,
         marker=dict(color="#FFFFFF", size=10, symbol="circle",
                     line=dict(color="#1565C0", width=2.5)),
