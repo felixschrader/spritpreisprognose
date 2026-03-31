@@ -5,7 +5,23 @@ from data_loader import load_data
 
 
 def _ensure_columns(df: pd.DataFrame) -> pd.DataFrame:
-    out = df.copy()
+    out = df
+    needs_copy = False
+
+    if "timestamp" in out.columns and not pd.api.types.is_datetime64_any_dtype(out["timestamp"]):
+        needs_copy = True
+    if "monat" not in out.columns and "timestamp" in out.columns:
+        needs_copy = True
+    if "stunde" not in out.columns and "timestamp" in out.columns:
+        needs_copy = True
+    if "tageszeit" not in out.columns and "stunde" in out.columns:
+        needs_copy = True
+    if "preis" not in out.columns:
+        needs_copy = True
+
+    if needs_copy:
+        out = df.copy()
+
     if "timestamp" in out.columns:
         out["timestamp"] = pd.to_datetime(out["timestamp"], errors="coerce")
     if "monat" not in out.columns and "timestamp" in out.columns:
@@ -44,5 +60,6 @@ def get_page_data(required_columns: set[str] | None = None) -> pd.DataFrame:
                 + ", ".join(sorted(missing))
             )
             st.stop()
-    st.session_state["data"] = df
+    if st.session_state.get("data") is not df:
+        st.session_state["data"] = df
     return df

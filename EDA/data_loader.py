@@ -29,7 +29,7 @@ LOAD_COLUMNS = [
 ]
 OPTIONAL_CATEGORY_COLUMNS = ["brand", "station_name", "tageszeit", "schulferien_name"]
 
-@st.cache_data
+@st.cache_data(ttl=3600, max_entries=1)
 def load_data():
     data_path = next((p for p in DATA_CANDIDATES if p.exists()), None)
     if data_path is None:
@@ -51,5 +51,8 @@ def load_data():
     for col in OPTIONAL_CATEGORY_COLUMNS:
         if col in df.columns:
             df[col] = df[col].astype("category")
+    for col in df.select_dtypes(include=["float64"]).columns:
+        if col != "timestamp":
+            df[col] = df[col].astype("float32")
 
     return df
