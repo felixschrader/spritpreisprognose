@@ -905,6 +905,10 @@ def baue_prognose_linie(jetzt_ts, letzter_preis, kern_preis, pred_delta_cent, hi
     Für den laufenden Kalendertag: Mischung aus gestrigem Bin-Preis (gleiche 3h-Bin)
     und morgigem Modellpunkt (kern + predΔ + α·Spanne), Anteil morgen steigt über
     den Tag (ca. voll nach ~18 h), damit die Linie nicht dauerhaft zu niedrig liegt.
+
+    Zusätzlich wird ein generisches Tagesprofil aus den letzten 28 Tagen verwendet
+    (stunden/bin-typische Muster). Das dämpft Ausreißer einzelner Tage, sodass
+    Morgen-/Mittagswellen plausibel bleiben und nicht unrealistisch „spiken“.
     """
     KERN_H = list(range(13, 21))  # wie live_inference_tagesbasis (13–20 Uhr)
     heute_norm = jetzt_ts.normalize()
@@ -944,7 +948,54 @@ def baue_prognose_linie(jetzt_ts, letzter_preis, kern_preis, pred_delta_cent, hi
         yb = float(row["preis"])
         alpha_map[b] = (yb - kern_y) / denom
 
-    default_alpha = float(np.mean(list(alpha_map.values()))) if alpha_map else 0.5
+    # Generisches Tagesprofil aus 28 Tagen (robust gegen einzelne Ausreißer)
+    profile_alpha_map = {}
+    profile_span_vals = []
+    if hist_28d_df is not None and not hist_28d_df.empty:
+        h28 = hist_28d_df[["stunde", "preis"]].copy()
+        h28["stunde"] = pd.to_datetime(h28["stunde"], errors="coerce")
+        h28["preis"] = pd.to_numeric(h28["preis"], errors="coerce")
+        h28 = h28.dropna(subset=["stunde", "preis"]).copy()
+        h28["tag"] = h28["stunde"].dt.normalize()
+        h28["stunde_h"] = h28["stunde"].dt.hour
+        h28["wochentag"] = h28["stunde"].dt.dayofweek
+        h28 = h28[h28.apply(lambda r: ist_offen(r["stunde_h"], r["wochentag"]), axis=1)].copy()
+        if not h28.empty:
+            h28["bin3"] = (h28["stunde"].dt.hour // 3) * 3
+            kern_by_day = h28[h28["stunde_h"].isin(KERN_H)].groupby("tag")["preis"].quantile(0.10)
+            if kern_by_day.empty:
+                kern_by_day = h28.groupby("tag")["preis"].quantile(0.10)
+            bin_by_day = h28.groupby(["tag", "bin3"])["preis"].mean().reset_index()
+            max_by_day = bin_by_day.groupby("tag")["preis"].max()
+            day_df = pd.DataFrame({"kern": kern_by_day, "mx": max_by_day}).dropna()
+            day_df["span"] = (day_df["mx"] - day_df["kern"]).clip(lower=0.01)
+            profile_span_vals = day_df["span"].tolist()
+            if not day_df.empty:
+                kmap = day_df["kern"].to_dict()
+                smap = day_df["span"].to_dict()
+                bin_by_day["alpha"] = bin_by_day.apply(
+                    lambda r: (float(r["preis"]) - float(kmap.get(r["tag"], np.nan))) / float(smap.get(r["tag"], 0.01)),
+                    axis=1,
+                )
+                p = bin_by_day.dropna(subset=["alpha"]).groupby("bin3")["alpha"].median()
+                profile_alpha_map = {int(k): float(v) for k, v in p.to_dict().items()}
+
+    # Gestern + generisches Profil kombinieren
+    alpha_mix = {}
+    bins_all = set(alpha_map.keys()) | set(profile_alpha_map.keys())
+    for b in bins_all:
+        a_y = alpha_map.get(b)
+        a_p = profile_alpha_map.get(b)
+        if a_y is not None and a_p is not None:
+            alpha_mix[b] = 0.35 * float(a_y) + 0.65 * float(a_p)
+        elif a_p is not None:
+            alpha_mix[b] = float(a_p)
+        elif a_y is not None:
+            alpha_mix[b] = float(a_y)
+
+    if alpha_mix:
+        alpha_map = alpha_mix
+    default_alpha = float(np.median(list(alpha_map.values()))) if alpha_map else 0.45
     # Gestern: absoluter 3h-Bin-Mittelwert je Bin (für heute: Mischung Richtung „morgen“)
     bin_preis_gestern = {
         int(r["bin3"]): float(r["preis"]) for _, r in df_g_bin.iterrows()
@@ -966,6 +1017,13 @@ def baue_prognose_linie(jetzt_ts, letzter_preis, kern_preis, pred_delta_cent, hi
     # Dann Spanne vom Vortag (denom) nutzen; abends mit vollem Tagesrand nicht überschreiben.
     if (m0 - k0) < 0.02 and (jetzt_ts.hour < 15 or len(df_today) < 8):
         m0 = k0 + float(denom)
+    # Spanne zusätzlich robust deckeln: verhindert unplausible Peak-Ausreißer.
+    if profile_span_vals:
+        span_cap = float(np.quantile(profile_span_vals, 0.85)) * 1.15
+        span_cap = max(0.02, min(span_cap, 0.25))
+        cur_span = max(0.0, m0 - k0)
+        if cur_span > span_cap:
+            m0 = k0 + span_cap
 
     pred_delta_eur = pred_delta_cent / 100.0
 
@@ -983,7 +1041,7 @@ def baue_prognose_linie(jetzt_ts, letzter_preis, kern_preis, pred_delta_cent, hi
 
         bin3 = (h // 3) * 3
         alpha = alpha_map.get(bin3, default_alpha)
-        alpha = float(max(-1.0, min(2.0, alpha)))
+        alpha = float(max(-0.25, min(1.15, alpha)))
         day_offset = (ts.normalize() - heute_norm).days
 
         if day_offset == 0:
