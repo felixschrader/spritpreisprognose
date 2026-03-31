@@ -1,13 +1,9 @@
 # -------------------------------------------------------
 # Import nötige Bibliotheken
 # -------------------------------------------------------
-import warnings
-import sys
+from pathlib import Path
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import joblib
 
 # -------------------------------------------------------
 # BLOCK 1: Streamlit Konfiguration
@@ -23,9 +19,27 @@ st.set_page_config(
 # BLOCK 2: Daten laden
 # -------------------------------------------------------
 
+BASE_DIR = Path(__file__).resolve().parent
+PAGE_DIR = BASE_DIR / "pages"
+DATA_CANDIDATES = [
+    BASE_DIR / "ml_master_dataset.parquet",
+    BASE_DIR.parent / "ml_master_dataset.parquet",
+]
+
+
 @st.cache_data
 def load_data():
-    df = pd.read_parquet("ml_master_dataset.parquet")
+    data_path = next((p for p in DATA_CANDIDATES if p.exists()), None)
+    if data_path is None:
+        candidate_text = "\n".join(f"- `{p}`" for p in DATA_CANDIDATES)
+        st.error(
+            "Datendatei `ml_master_dataset.parquet` wurde nicht gefunden.\n\n"
+            "Gepruefte Pfade:\n"
+            f"{candidate_text}"
+        )
+        st.stop()
+
+    df = pd.read_parquet(data_path)
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     return df
 
@@ -49,16 +63,16 @@ st.sidebar.caption("Interactive Fuel Price Dashboard")
 # BLOCK 5: Navigation
 # -------------------------------------------------------
 
-seite_0 = st.Page("pages/01_Projektbeschreibung.py", title="Dashboard", icon="🏠")
-seite_1 = st.Page("pages/02_Jahresverlauf.py", title="Jahresverlauf", icon="📅")
-seite_2 = st.Page("pages/03_Tagesverlauf.py", title="Tagesverlauf", icon="⏰")
-seite_3 = st.Page("pages/04_Markenvergleich.py", title="Marken", icon="⛽")
-seite_4 = st.Page("pages/05_Beste_Tankzeit.py", title="Beste Tankzeit", icon="🏆")
-seite_5 = st.Page("pages/06_Einflussfaktoren.py", title="Einfluss", icon="🌤")
-seite_6 = st.Page("pages/07_Treppendiagramm.py", title="Treppendiagramm", icon="📈")
-seite_7 = st.Page("pages/08_Brent_Analyse.py", title="Brent", icon="🛢")
-seite_8 = st.Page("pages/09_Zusammenhaenge.py", title="Zusammenhänge", icon="🔗")
-seite_9 = st.Page("pages/10_Tankstellenvergleich.py", title="Tankstellen", icon="📍")
+seite_0 = st.Page(str(PAGE_DIR / "01_Projektbeschreibung.py"), title="Dashboard", icon="🏠")
+seite_1 = st.Page(str(PAGE_DIR / "02_Jahresverlauf.py"), title="Jahresverlauf", icon="📅")
+seite_2 = st.Page(str(PAGE_DIR / "03_Tagesverlauf.py"), title="Tagesverlauf", icon="⏰")
+seite_3 = st.Page(str(PAGE_DIR / "04_Markenvergleich.py"), title="Marken", icon="⛽")
+seite_4 = st.Page(str(PAGE_DIR / "05_Beste_Tankzeit.py"), title="Beste Tankzeit", icon="🏆")
+seite_5 = st.Page(str(PAGE_DIR / "06_Einflussfaktoren.py"), title="Einfluss", icon="🌤")
+seite_6 = st.Page(str(PAGE_DIR / "07_Treppendiagramm.py"), title="Treppendiagramm", icon="📈")
+seite_7 = st.Page(str(PAGE_DIR / "08_Brent_Analyse.py"), title="Brent", icon="🛢")
+seite_8 = st.Page(str(PAGE_DIR / "09_Zusammenhaenge.py"), title="Zusammenhänge", icon="🔗")
+seite_9 = st.Page(str(PAGE_DIR / "10_Tankstellenvergleich.py"), title="Tankstellen", icon="📍")
 
 pg = st.navigation([
     seite_0,
@@ -146,7 +160,7 @@ filtered_df = df[
         pd.to_datetime(date_range[0]),
         pd.to_datetime(date_range[1])
     ))
-]
+].copy()
 
 # Kraftstoff Preis setzen
 filtered_df["preis"] = filtered_df[f"preis_{fuel}"]
