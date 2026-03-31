@@ -1,7 +1,8 @@
-# Spritpreisprognose — Dieselpreisprognose mit ML
+# DSI Capstone Project 2026 - Fuel Price Forecast MVP
 
-> DSI Capstone 2026 · Felix Schrader, Girandoux Fandio Nganwajop, Ghislain Wamo  
-> Station: ARAL Dürener Str. 407, Köln · Datenquelle: Tankerkönig / MTS-K
+> Capstone project in the 6-month Data Science training program at the Data Science Institute ([DSI](https://data-science-institute.de/)).
+>
+> Team: Felix Schrader, Girandoux Fandio Nganwajop, Ghislain Wamo
 
 [![GitHub Actions](https://img.shields.io/badge/CI-GitHub_Actions-blue)](https://github.com/felixschrader/spritpreisprognose)
 [![Streamlit](https://img.shields.io/badge/Dashboard-Streamlit_Cloud-red)](https://streamlit.io)
@@ -9,221 +10,230 @@
 
 ---
 
-## Projektziel
+## 1) Context
 
-Dieses Projekt analysiert und prognostiziert Dieselpreise an einer ARAL-Tankstelle in Köln. Im Mittelpunkt steht nicht nur die Prognose, sondern die **empirische Analyse des algorithmischen Preissetzungsverhaltens** der Mineralölkonzerne — insbesondere das *Rockets & Feathers*-Phänomen.
+This project was built as a practical capstone in a constrained setting: the full training program runs over six months, but the MVP implementation window for this prototype was about two weeks.
 
----
+The goal was to deliver a robust and operational short-term forecast for one local station first, with a design that can be extended later to:
+- other stations,
+- local competitor-aware setups,
+- additional fuel types (E5/E10).
 
-## Kernbefunde
-
-### 1. Rockets & Feathers — empirisch nachgewiesen
-
-| Brent-Bewegung | Erhöhungen | Senkungen | Asymmetrie |
-|----------------|-----------|-----------|------------|
-| Brent steigt   | **37.5%** | 30.4%     | +7.1 Punkte Erhöhungs-Bias |
-| Brent fällt    | 28.2%     | **38.8%** | +10.6 Punkte Senkungs-Bias |
-| Brent neutral  | 21.6%     | 20.7%     | symmetrisch |
-
-> *Konsistent mit der Rockets-&-Feathers-Hypothese (Bacon 1991, Frondel et al. 2021): Tankstellen erhöhen Preise schneller als sie senken.*
-
-### 2. Pass-Through-Rate
-
-1 € Brent-Anstieg → **0.18–0.40 Cent** Kernpreis-Änderung (Lag 1–3 Tage).  
-R² des direkten Brent-Kernpreis-Zusammenhangs: **0.89** (Niveau), **0.09** (tägliches Delta).
-
-### 3. Residuum-Persistenz
-
-ARAL Dürener Str. hält ihre Preisposition relativ zum NRW-Markt stabil.  
-AR(1)-Autokorrelation des Residuums: **0.61** — stärkster Einzelprädiktor im Modell.
+The current production focus is Diesel at ARAL Duerener Str. 407, Cologne.
 
 ---
 
-## ML-Modell
+## 2) Target Group
 
-### Zielvariable
-
-```
-ziel = rolling_mean(kernpreis_p10, 3).shift(-2) - rolling_mean(kernpreis_p10, 3)
-```
-
-Der **Kernpreis** ist definiert als p10 der Stundenbins (Median) zwischen 13–20 Uhr — der stabile Nachmittagspreis nach dem Senkungsprozess, bereinigt von den algorithmischen Morgenspikes.
-
-### Modell-Performance
-
-| Metrik | Wert |
-|--------|------|
-| Modell | Random Forest Regressor |
-| Richtungs-Accuracy Test | **67.9%** |
-| Richtungs-Accuracy Val | **75.0%** |
-| Baseline (Zufallsraten) | 38.6% |
-| Delta über Baseline | **+29.3 Prozentpunkte** |
-| MAE Test | 0.89 Cent |
-| R² Test | 0.30 |
-| Horizont | 2 Tage (roll=3, shift=2) |
-
-### Feature Importance (SHAP)
-
-| Rang | Feature | Beschreibung |
-|------|---------|--------------|
-| 1 | `brent_delta2` | Brent-€-Änderung vor 2 Tagen |
-| 2 | `delta_kern_lag1` | Kernpreis-Delta gestern |
-| 3 | `residuum_lag1` | ARAL vs. NRW-Markt gestern |
-| 4 | `delta_markt_lag1` | Marktbewegung gestern |
-| 5 | `tage_seit_erhoehung` | Tage seit letzter Preiserhöhung |
-
-### Modellvergleich
-
-| Modell | Richtung Test | R² Test | MAE Test |
-|--------|--------------|---------|----------|
-| Random Forest (final) | **67.9%** | **0.30** | 0.89c |
-| XGBoost | 65.7% | 0.18 | 0.96c |
-| Ridge Regression | 62.0% | -1.66 | 0.85c |
-| LSTM | 60.4% | -0.25 | 0.62c |
-| CNN | 58.2% | -0.21 | 1.05c |
-| Transformer | 57.3% | -5.90 | 3.11c |
-| Persistenz-Baseline | 73.6% | 0.99 | 0.33c |
-| Richtungs-Baseline | 38.6% | — | 0.88c |
-
-> *Anmerkung: Persistenz (morgen = heute) hat hohe Accuracy für absolute Preise (R²=0.99), ist aber trivial — sie sagt nie eine Richtungsänderung vorher. Unser Modell predictet die Richtungsänderung des 3-Tage-Rolling-Kernpreises.*
+Primary users of the MVP are:
+- drivers with short-term fueling decisions,
+- project stakeholders evaluating model usefulness in practice,
+- technical reviewers interested in end-to-end ML deployment under time constraints.
 
 ---
 
-## Datenquellen & Pipeline
+## 3) Core Question
 
-| Quelle | Daten | Zeitraum | Update |
-|--------|-------|----------|--------|
-| Tankerkönig | Preisänderungen (sekündlich) | 2019–2026 | täglich |
-| FRED API | Brent Crude Futures (USD) | 2014–2026 | täglich |
-| EZB API | EUR/USD-Wechselkurs | 2014–2026 | täglich |
-| Barchart | Brent Intraday 1h | 2017–2026 | einmalig |
-| feiertage-api.de | NRW-Feiertage | 2014–2026 | jährlich |
-| OpenHolidays API | NRW-Schulferien | 2014–2026 | jährlich |
-| BEHG / DEHSt | CO₂-Abgabe | 2021–2026 | jährlich |
-
-### GitHub Actions Workflows
-
-```
-.github/workflows/
-├── update_tankstellen.yml      # täglich 05:00 — Preisdaten
-├── live_inference.yml          # stündlich — Stunden-Prognose (v1)
-├── live_inference_tagesbasis.yml # täglich 09:00 — Tages-Prognose (v2)
-├── brent_update.yml            # täglich — Brent/EUR-USD
-├── feiertage_update.yml        # jährlich
-└── schulferien_update.yml      # halbjährlich
-```
+How can we build a robust, interpretable short-term fuel price forecast despite:
+- strong intraday pricing cycles,
+- local competitive reaction patterns,
+- noisy high-frequency raw price data?
 
 ---
 
-## Projektstruktur
+## 4) Methodology (argumentation chain)
 
-```
+### 4.1 Why a core-price proxy?
+
+Raw station prices are highly volatile intraday. For a stable target signal, we define a **core price** that is comparable across days with less noise.
+
+### 4.2 Core-price definition
+
+1. Aggregate raw price events into hourly bins (median per hour).
+2. Keep the empirically most stable window: **13:00-20:00**.
+3. Use **P10** across that window as daily core price proxy.
+
+Rationale:
+- This suppresses morning spike artifacts.
+- It remains conservative for daily buying opportunities.
+- It supports temporal comparability for modeling.
+
+### 4.3 Market structure signals used
+
+Besides station-level dynamics, we model:
+- **Pass-through behavior** (oil/currency effects to local core price),
+- **Residual persistence** (station vs market-relative component).
+
+We do not claim a final causal proof of Rockets-and-Feathers in this MVP. The current analysis is framed as evidence patterns to be refined in future work.
+
+---
+
+## 5) Architecture and model production
+
+### 5.1 ETL and EDA foundation
+
+- ETL ingests Tankerkoenig data, updates curated parquet/csv assets, and keeps historical continuity.
+- EDA was used to identify stable time windows, cycle patterns, and robust target candidates.
+
+### 5.2 ML pipeline
+
+- Feature sets combine lagged core-price deltas, market context, and external drivers.
+- A staged experimental process compares alternative horizons/shifts and target definitions.
+
+### 5.3 Target-variable selection (iterative search)
+
+The target was selected via iterative testing (grid-like search across horizon and shift choices).
+Final choice:
+
+`roll3_shift2`:  
+`rolling_mean(core_price, 3).shift(-2) - rolling_mean(core_price, 3)`
+
+This setup gave the best balance between directional signal quality and robustness for MVP constraints.
+
+### 5.4 Feature engineering
+
+Main feature groups:
+- lagged station core-price signals,
+- market-relative residuals,
+- external variables (Brent, EUR/USD, calendar, weather, CO2/tax context),
+- simple regime indicators (e.g., days since last increase).
+
+### 5.5 Train/test split
+
+Temporal split is used (no random shuffle), preserving causal order and avoiding leakage from future observations.
+
+### 5.6 Model selection
+
+The final production model is a **Random Forest Regressor** on the selected target.
+Competing model families were benchmarked, but RF provided the best practical trade-off for this MVP.
+
+### 5.7 Evaluation (MVP level)
+
+Reference metrics from the current setup:
+- Directional accuracy (test): ~67.9%
+- MAE (test): ~0.89 cent
+- R2 (test): ~0.30
+
+### 5.8 Model persistence
+
+Trained artifacts are stored in `data/ml/` and consumed by inference scripts and dashboard components.
+
+---
+
+## 6) Automation with GitHub Actions
+
+All recurring data/model updates are automated via GitHub Actions.
+Cron schedules are configured in **UTC**.
+
+| Workflow | Purpose | Schedule (UTC) |
+|---|---|---|
+| `update_tankstellen.yml` | Update station price history | daily `04:00` |
+| `live_inference.yml` | Hourly short-term inference | hourly at `:15` |
+| `live_inference_tagesbasis.yml` | Daily day-basis inference | daily `09:00` |
+| `update_brent_prices.yml` | Brent updates | every 2h at `:00` |
+| `update_eur_usd.yml` | EUR/USD updates | every 2h at `:10` |
+| `update_wetter.yml` | Weather update | daily `04:30` |
+| `update_co2_abgabe.yml` | CO2 levy update | Tuesdays `06:00` |
+| `update_feiertage.yml` | Holiday update | yearly Jan 1, `06:00` |
+| `update_schulferien.yml` | School holiday update | yearly Jan 2, `07:00` |
+| `backfill.yml` | Manual historical backfill | manual trigger only |
+
+---
+
+## 7) Streamlit dashboard implementation
+
+The dashboard is implemented in Streamlit (`scripts/dashboard.py`) and includes:
+- model outputs and confidence-oriented KPI panels,
+- short-term forecast visualization,
+- generated recommendation text via Anthropic API,
+- map integration using OpenStreetMap,
+- custom styling/theme for presentation-oriented readability.
+
+## 8) Project structure
+
+```text
 spritpreisprognose/
-├── notebooks/
-│   ├── Machine_Learning_MVP_v2.ipynb      # stündliches Klassifikationsmodell
-│   └── Machine_Learning_Tagesbasis.ipynb  # tagesbasiertes Regressionsmodell
 ├── data/
-│   ├── tankstellen_preise.parquet         # Preishistorie ARAL + Nachbarn
-│   ├── tankstellen_stationen.parquet      # Stationsdaten
+│   ├── tankstellen_preise.parquet
+│   ├── tankstellen_stationen.parquet
 │   ├── brent_futures_daily.csv
-│   ├── brent_futures_1h.csv               # Intraday Brent (Barchart)
 │   ├── eur_usd_rate.csv
 │   ├── feiertage.csv
 │   ├── schulferien.csv
-│   ├── externe_effekte.csv
-│   ├── energiesteuer.csv
+│   ├── wetter_koeln.csv
 │   └── ml/
+│       ├── prognose_aktuell.json
+│       ├── prognose_tagesbasis.json
 │       ├── modell_rf_markt_aral_duerener.pkl
-│       ├── modell_metadaten_markt_aral_duerener.json
-│       ├── prognose_tagesbasis.json        # täglich aktualisiert
-│       └── aral_nrw_tagesbasis.parquet     # 585 Stationen NRW
+│       └── modell_metadaten_markt_aral_duerener.json
 ├── scripts/
-│   ├── dashboard.py                        # Streamlit — stündlich
+│   ├── dashboard.py
+│   ├── README.md
 │   ├── inference/
-│   │   ├── live_inference.py               # stündliche Inference
-│   │   └── live_inference_tagesbasis.py    # tägliche Inference
+│   │   ├── live_inference.py
+│   │   └── live_inference_tagesbasis.py
 │   ├── features/
 │   │   ├── brent_price.py
 │   │   ├── eur_usd_rate.py
 │   │   ├── wetter_koeln.py
 │   │   ├── feiertage.py
 │   │   ├── schulferien.py
-│   │   └── co2_abgabe.py
+│   │   ├── co2_abgabe.py
+│   │   ├── energiesteuer.py
+│   │   └── externe_effekte.py
 │   └── pipeline/
-│       ├── tankerkoenig_pipeline.py        # ETL-Pipeline
+│       ├── tankerkoenig_pipeline.py
 │       └── backfill_prognose_log.py
+├── notebooks/
+│   └── Machine_Learning_Tagesbasis.ipynb
+├── .github/workflows/
+└── requirements.txt
 ```
 
 ---
 
-## Methodology
+## 9) Tech stack
 
-### Kernpreis-Definition
+### Core components
+- Python
+- pandas / numpy
+- scikit-learn
+- Streamlit
+- Plotly
+- GitHub Actions
 
-Rohe Tankerkönig-Daten enthalten sekündliche Preisänderungen inkl. algorithmischer Morgenspikes (+15–30 Cent um 06:00 Uhr). Wir definieren den **Tageskernpreis** als:
-
-1. Rohdaten → Stundenbins (Median pro Stunde)
-2. Filter: nur Stunden 13–20 Uhr (stabil, nach Senkungsprozess)
-3. p10 dieser Stunden → Kernpreis
-
-**Begründung:** Der Scatter-Plot Tagesstunde vs. Abstand vom Median zeigt einen klaren Peak bei 06:00 Uhr (10.32 Cent mittlerer Abstand) und stabile Werte 13–20 Uhr (1.86–2.33 Cent).
-
-### Zielvariablen-Wahl
-
-Wir haben systematisch getestet:
-- `delta_t1` (morgen vs. heute): R²=0.09, zu verrauscht
-- Absolute Preise: Persistenz nicht schlagbar (R²=0.99)
-- Neuronale Netze: alle 24 Modelle schlechter als Persistenz
-- **`roll3_shift2`** (3-Tage-Rolling, 2 Tage voraus): R²=0.30, Richtung 67.9% ✅
-
-### NRW-Marktanalyse
-
-Wir haben alle 585 ARAL-Stationen in NRW analysiert (1.67M Zeilen, 2019–2026) um:
-- den NRW-Marktmedian als strukturelles Signal zu extrahieren
-- das stationsindividuelle Residuum (ARAL Dürener vs. Markt) zu quantifizieren
-- Rockets & Feathers über einen robusten Datensatz nachzuweisen
+### APIs and external services
+- Tankerkoenig / MTS-K
+- Anthropic API (text generation)
+- OpenStreetMap
 
 ---
 
-## Installation & Ausführung
+## 10) Local run
 
 ```bash
-# Repository klonen
 git clone git@github.com:felixschrader/spritpreisprognose.git
 cd spritpreisprognose
-
-# Abhängigkeiten installieren
 pip install -r requirements.txt
 
-# .env anlegen
-echo "TANKERKOENIG_KEY=dein_key" > .env
-echo "ANTHROPIC_API_KEY=dein_key" >> .env
+# optional: local secrets
+echo "TANKERKOENIG_KEY=your_key" > .env
+echo "ANTHROPIC_API_KEY=your_key" >> .env
 
-# Dashboard starten
+# dashboard
 streamlit run scripts/dashboard.py
 
-# Tages-Inference ausführen
+# daily inference (manual run)
 python scripts/inference/live_inference_tagesbasis.py
 ```
 
 ---
 
-## Literatur
-
-- Bacon, R.W. (1991): *Rockets and Feathers: The Asymmetric Speed of Adjustment of UK Retail Gasoline Prices to Cost Changes*. Energy Economics, 13(3), 211–218.
-- Frondel, M., Horvath, M., Sommer, S. (2021): *Rockets and Feathers in German Gasoline Markets*. Ruhr Economic Papers.
-- Tankerkönig (2026): *Kraftstoffpreise Deutschland*. [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
-
----
-
 ## Team
 
-| Name | Rolle |
-|------|-------|
-| Felix Schrader | Infrastructure, Data Mining, ML, Automation |
-| Girandoux Fandio Nganwajop | ETL, EDA, Datenbankentwicklung |
-| Ghislain Wamo | Datenbankarchitektur, Dashboard |
+| Name | Role |
+|---|---|
+| Felix Schrader | Infrastructure, Data Engineering, ML, Automation |
+| Girandoux Fandio Nganwajop | ETL, EDA, Data Engineering |
+| Ghislain Wamo | Data Architecture, Dashboard |
 
----
-
-*DSI Continuing Education Program 2026 · Köln*
