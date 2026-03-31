@@ -26,10 +26,37 @@ PROGNOSE_PATH = "data/ml/prognose_tagesbasis.json"
 LOG_PATH      = "data/ml/prognose_log.csv"
 SAMPLE_PATH   = "data/ml/aral_nrw_sample_uuids.csv"
 
-modell    = joblib.load(MODELL_PATH)
+def _download_model_if_missing(local_path: str, env_url_key: str) -> bool:
+    if os.path.exists(local_path):
+        return True
+    fname = os.path.basename(local_path)
+    candidates = []
+    env_url = os.getenv(env_url_key)
+    if env_url:
+        candidates.append(env_url)
+    candidates.append(f"https://github.com/felixschrader/spritpreisprognose/releases/latest/download/{fname}")
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+    for url in candidates:
+        try:
+            r = requests.get(url, timeout=20)
+            if r.status_code == 200 and r.content:
+                with open(local_path, "wb") as f:
+                    f.write(r.content)
+                print(f"✅ Modell geladen von: {url}")
+                return True
+            print(f"ℹ️ Kein Modell unter {url} (HTTP {r.status_code})")
+        except Exception as e:
+            print(f"ℹ️ Download fehlgeschlagen ({url}): {e}")
+    return False
+
 metadaten = json.load(open(META_PATH, encoding="utf-8"))
 FEATURES  = metadaten["feature_cols"]
-print(f"Modell geladen · Features: {FEATURES}")
+modell = None
+if _download_model_if_missing(MODELL_PATH, "MODELL_RF_MARKT_URL"):
+    modell = joblib.load(MODELL_PATH)
+    print(f"Modell geladen · Features: {FEATURES}")
+else:
+    print(f"⚠️ Modell fehlt: {MODELL_PATH} — nutze Heuristik-Fallback.")
 
 # ARAL Kernpreis
 preise = pd.read_parquet("data/tankstellen_preise.parquet")
@@ -148,7 +175,17 @@ feature_dict = {
 }
 
 X_live     = pd.DataFrame([feature_dict])[FEATURES]
-pred_delta = float(modell.predict(X_live)[0])
+if modell is not None:
+    pred_delta = float(modell.predict(X_live)[0])
+else:
+    # Fallback ohne .pkl: konservative Schätzung aus jüngsten ARAL/Markt-Lags
+    pred_delta = float(np.nanmean([
+        feature_dict.get("delta_kern_lag1", 0.0),
+        feature_dict.get("delta_kern_lag2", 0.0),
+        feature_dict.get("delta_markt_lag1", 0.0),
+    ]))
+    pred_delta = float(np.clip(pred_delta, -0.03, 0.03))
+    print(f"⚠️ Heuristik-Fallback aktiv: pred_delta={pred_delta*100:+.2f} ct")
 
 if pred_delta > SCHWELLE_ANP:
     richtung, empfehlung = "steigt", "heute tanken"
@@ -213,7 +250,7 @@ prognose_json = {
     "tage_seit_erhoehung": int(letzte_aral["tage_seit_erhoehung"]),
     "tage_seit_senkung": int(letzte_aral["tage_seit_senkung"]),
     "nrw_stationen_live": len(nrw_preise),
-    "modell": metadaten["modell"],
+    "modell": metadaten["modell"] if modell is not None else "fallback_heuristik_ohne_pkl",
     "richtung_accuracy_test": metadaten["richtung_accuracy_test"],
     "horizont": metadaten["horizont"],
 }

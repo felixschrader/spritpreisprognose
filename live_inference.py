@@ -28,6 +28,29 @@ feature_cols = metadaten["feature_cols"]
 ziel_cols    = metadaten["ziel_cols"]
 nachbar_uuids = metadaten["nachbar_uuids"]
 
+def _download_model_if_missing(local_path: str, env_url_key: str) -> bool:
+    if os.path.exists(local_path):
+        return True
+    fname = os.path.basename(local_path)
+    candidates = []
+    env_url = os.getenv(env_url_key)
+    if env_url:
+        candidates.append(env_url)
+    candidates.append(f"https://github.com/felixschrader/spritpreisprognose/releases/latest/download/{fname}")
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+    for url in candidates:
+        try:
+            r = requests.get(url, timeout=20)
+            if r.status_code == 200 and r.content:
+                with open(local_path, "wb") as f:
+                    f.write(r.content)
+                print(f"✅ Modell geladen von: {url}")
+                return True
+            print(f"ℹ️ Kein Modell unter {url} (HTTP {r.status_code})")
+        except Exception as e:
+            print(f"ℹ️ Download fehlgeschlagen ({url}): {e}")
+    return False
+
 # --- Schritt 2: Aktuelle Preise via Tankerkönig — max 10 IDs pro Request ---
 import math
 
@@ -198,8 +221,15 @@ feature_dict = {
 X_live = pd.DataFrame([feature_dict])[feature_cols]
 
 # --- Schritt 9: Prognose ---
-modell       = joblib.load("data/ml/modell_rf_multi_aral_duerener.pkl")
-prognose_arr = modell.predict(X_live)[0]  # Array mit 24 binären Werten
+MODELL_PATH_MULTI = "data/ml/modell_rf_multi_aral_duerener.pkl"
+if _download_model_if_missing(MODELL_PATH_MULTI, "MODELL_RF_MULTI_URL"):
+    modell = joblib.load(MODELL_PATH_MULTI)
+    prognose_arr = modell.predict(X_live)[0]  # Array mit 24 binären Werten
+else:
+    # Fallback, damit der Workflow nicht bei fehlender .pkl-Datei ausfällt.
+    trend_up = float(letzte["delta_3h"]) > 0
+    prognose_arr = np.array([1 if trend_up else 0] * 24)
+    print(f"⚠️ Modell fehlt: {MODELL_PATH_MULTI} — nutze Trend-Fallback ({'steigt' if trend_up else 'fällt'}).")
 
 # Stufenlinie aufbauen — ausgehend vom aktuellen Preis
 prognose_stufen = []
