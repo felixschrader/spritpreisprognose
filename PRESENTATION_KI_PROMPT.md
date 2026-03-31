@@ -10,7 +10,7 @@ Du bist ein erfahrener Präsentationscoach und Fachexperte für Data Science / M
 Aufgabe: Erstelle eine strukturierte Abschlusspräsentation (Folien + Sprechernotizen) für ein DSI-Capstone-Projekt.
 
 ## Projektkontext
-- Programm: 6-monatiges Data-Science-Weiterbildungsprogramm am Data Science Institute (DSI), Köln. Link Institut: https://data-science-institute.de/
+- Programm: 6-monatiges Data-Science-Weiterbildungsprogramm am Data Science Institute (DSI), Berlin. Link Institut: https://data-science-institute.de/
 - Projekttyp: MVP / Prototyp mit produktionsnaher Automatisierung
 - Umsetzungsfenster für den Prototyp: ca. 2 Wochen (bewusst knapp; Fokus auf Robustheit, Deployability, Erklärbarkeit)
 - Team: Felix Schrader, Girandoux Fandio Nganwajop, Ghislain Wamo
