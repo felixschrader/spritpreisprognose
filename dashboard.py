@@ -1170,6 +1170,59 @@ delta_val   = letzter_preis - mean_ref
 delta_cent  = delta_val * 100
 delta_cls  = "delta-green" if delta_val < 0 else "delta-red"
 delta_sign = "−" if delta_val < 0 else "+"
+unchanged_sub = ""
+
+if not df_live_raw.empty and {"timestamp", "preis"}.issubset(df_live_raw.columns):
+    try:
+        df_tmp = df_live_raw[["timestamp", "preis"]].copy()
+        df_tmp["timestamp"] = pd.to_datetime(df_tmp["timestamp"], errors="coerce")
+        df_tmp["preis"] = pd.to_numeric(df_tmp["preis"], errors="coerce")
+        df_tmp = df_tmp.dropna(subset=["timestamp", "preis"]).sort_values("timestamp")
+        if not df_tmp.empty:
+            last_row = df_tmp.iloc[-1]
+            if abs(float(last_row["preis"]) - float(letzter_preis)) < 0.0005:
+                mins = int(max(0, (jetzt_ts - pd.Timestamp(last_row["timestamp"])).total_seconds() // 60))
+                # Typische Änderungsfrequenz über Tagesverlauf (stundenbasiert) aus Historie ableiten
+                hist = df_ext[["stunde", "preis"]].copy()
+                hist["stunde"] = pd.to_datetime(hist["stunde"], errors="coerce")
+                hist["preis"] = pd.to_numeric(hist["preis"], errors="coerce")
+                hist = hist.dropna(subset=["stunde", "preis"]).sort_values("stunde")
+                hist = hist[hist["stunde"] >= (jetzt_ts - pd.Timedelta(days=28))]
+                hist["chg"] = hist["preis"].diff().abs() > 0.0005
+                events = hist[hist["chg"]].copy()
+                events["mins_since_prev"] = events["stunde"].diff().dt.total_seconds() / 60.0
+                events["hour"] = events["stunde"].dt.hour
+                cur_h = int(jetzt_ts.hour)
+
+                # Bevorzuge gleiche Stunde, dann Nachbarstunden (+/-1), danach globale Historie.
+                typ = events.loc[events["hour"] == cur_h, "mins_since_prev"].dropna()
+                if len(typ) < 4:
+                    nbr_hours = {((cur_h - 1) % 24), cur_h, ((cur_h + 1) % 24)}
+                    typ = events.loc[events["hour"].isin(nbr_hours), "mins_since_prev"].dropna()
+                if len(typ) < 6:
+                    typ = events["mins_since_prev"].dropna()
+                if len(typ) > 0:
+                    typ_mins = float(np.clip(typ.median(), 15, 720))
+                    ratio = mins / typ_mins if typ_mins > 0 else 0.0
+                    if ratio < 0.7:
+                        c = "#1B5E20"   # gruen: letzte Aenderung war noch relativ frisch
+                    elif ratio <= 1.05:
+                        c = "#EF6C00"   # orange: nahe am typischen Wechselintervall
+                    else:
+                        c = "#B71C1C"   # rot: typisches Intervall erreicht/ueberschritten
+                    unchanged_sub = (
+                        f'<div style="margin-top:4px;font-size:0.82rem;color:{c};font-weight:600;">'
+                        f'Unveraendert seit {mins} Min. · typisch hier: ~{int(round(typ_mins))} Min.'
+                        '</div>'
+                    )
+                else:
+                    unchanged_sub = (
+                        '<div style="margin-top:4px;font-size:0.82rem;color:#8E959F;">'
+                        f'Unveraendert seit {mins} Min.'
+                        '</div>'
+                    )
+    except Exception:
+        pass
 
 if richtung_tage == "fällt":
     tend_pfeil, tend_cls = "↓", "tendenz-down"
@@ -1188,7 +1241,7 @@ st.markdown(f"""
     <div class="card">
         <div class="card-head"><div class="card-title">Aktueller Preis · {uhrzeit} Uhr</div></div>
         <div class="card-main"><div class="card-value">{preis_fmt(letzter_preis)} &euro;</div></div>
-        <div class="card-foot"><span class="{delta_cls}">{delta_sign} {abs(delta_cent):.1f} ct vs. Ø gestern</span></div>
+        <div class="card-foot"><span class="{delta_cls}">{delta_sign} {abs(delta_cent):.1f} ct vs. Ø gestern</span>{unchanged_sub}</div>
     </div>
     <div class="card card--model-direction">
         <div class="card-head"><div class="card-title">Tagesmodell · Kernpreis-Richtung</div></div>
