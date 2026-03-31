@@ -60,7 +60,7 @@ Wie lässt sich eine robuste, nachvollziehbare Kurzfristprognose für Kraftstoff
 ## Stilvorgaben
 - Sprache: Deutsch, sachlich, präsentationstauglich, nicht übertrieben marketinglastig
 - Dauer: [10 Minuten Vortrag / oder: ___ Minuten] — daran die Folienanzahl anpassen
-- Keine erfundenen Kennzahlen; wenn Zahlen genannt werden, nur als Beispiel aus dem Projekt (~67,9 % Richtung, MAE ~0,89 ct, R² ~0,30) und als „MVP-Stand“ kennzeichnen
+- Keine erfundenen Kennzahlen; wenn Zahlen genannt werden, nur als Beispiel aus dem Projekt (Richtung Test z. B. ~68 %, naive Baseline „immer 0“ entspricht dem Anteil Tage mit Ziel ≤ 0 im Test — oft ~49 %, nicht fest 50 %; MAE Test ~0,9 ct, R² ~0,39) und als „MVP-Stand“ kennzeichnen
 
 Bitte liefere das Ergebnis als nummerierte Folienliste mit Sprechernotizen.
 ```

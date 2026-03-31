@@ -18,5 +18,8 @@
   "nrw_stationen_live": 43,
   "modell": "RandomForestRegressor (tuned)",
   "richtung_accuracy_test": 68.19,
-  "horizont": "2 Tage (roll=3, shift=2)"
+  "horizont": "2 Tage (roll=3, shift=2)",
+  "baseline_richtung_test": 49.3,
+  "delta_richtung_ueber_baseline_pp": 18.9,
+  "baseline_richtung_interpretation": "Naive Referenz: Vorhersage immer 0. Richtungs-Accuracy dann = Anteil Testtage mit Zielvariable ≤ 0 (Vorzeichen y>0 vs y_pred>0). Wert hängt von der Zielverteilung ab, nicht von 50-% Zufall; siehe README 5.7."
 }

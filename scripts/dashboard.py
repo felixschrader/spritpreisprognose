@@ -1165,6 +1165,14 @@ brent_delta2    = float(tages.get("brent_delta2", 0))
 pred_delta_cent = float(tages.get("predicted_delta_cent", 0))
 kern_preis      = float(tages.get("kernpreis_aktuell", letzter_preis))
 
+# Offline-Testkennzahlen (aus Metadaten, gespiegelt in prognose_tagesbasis.json)
+ML_ACC_TEST = float(tages.get("richtung_accuracy_test") or 68.19)
+ML_BASE_RICHT = float(tages.get("baseline_richtung_test") or 49.3)
+_dpp_raw = tages.get("delta_richtung_ueber_baseline_pp")
+ML_DELTA_PP = (
+    float(_dpp_raw) if _dpp_raw is not None else round(ML_ACC_TEST - ML_BASE_RICHT, 1)
+)
+
 # Historische Basis (28 Tage)
 cutoff_7d  = jetzt_ts - pd.Timedelta(days=7)
 cutoff_28d = jetzt_ts - pd.Timedelta(days=28)
@@ -1738,10 +1746,13 @@ with tab_kpi:
 with tab_perf:
     st.markdown('<div class="section-label">Retrograde Bewertung — Tages-Prognose</div>',
                 unsafe_allow_html=True)
-    st.caption("""**Zielvariable:** Δ gleitender 3-Tage-Kernpreis, Horizont 2 Tage.
+    st.caption(
+        f"""**Zielvariable:** Δ gleitender 3-Tage-Kernpreis, Horizont 2 Tage.
 Kernpreis = p10 der Stundenbins 13–20 Uhr.
-**Richtung korrekt** = Predicted und Actual auf gleicher Seite der ±0.5ct Schwelle.
-**MAE** = durchschnittliche Abweichung Predicted vs. Actual in Cent.""")
+**Richtung korrekt (hier)** = Predicted und Actual auf **derselben Seite** der **±0,5‑ct-Schwelle** (drei Klassen: auf / ab / Band) — **nicht** identisch mit der strengen Vorzeichen-Accuracy im Notebook (dort: y>0 vs. y_pred>0, ohne Band).
+**MAE** = durchschnittliche Abweichung Predicted vs. Actual in Cent.
+**Test-Set im Notebook** (Vorzeichen, siehe README 5.7): Modell **{ML_ACC_TEST:.1f} %**, naive Baseline „immer 0“ **{ML_BASE_RICHT:.1f} %** (= Anteil Testtage mit y ≤ 0)."""
+    )
 
     if df_prog_log.empty:
         st.info("Noch keine Log-Daten verfügbar.")
@@ -1786,8 +1797,12 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
                 <div class="kpi-lbl">MAE (3W)</div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-val">67.9<span style="font-size:0.75rem">%</span></div>
-                <div class="kpi-lbl">Acc. Test-Set</div>
+                <div class="kpi-val">{ML_ACC_TEST:.1f}<span style="font-size:0.75rem">%</span></div>
+                <div class="kpi-lbl">Acc. Test-Set (NB)</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-val">{ML_BASE_RICHT:.1f}<span style="font-size:0.75rem">%</span></div>
+                <div class="kpi-lbl">Baseline Richtung</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -2153,8 +2168,11 @@ st.markdown(f"""
       <div class="header-details-body">
         <p>Modell: Random Forest Regressor (scikit-learn)
         · Zielvariable: Δ gleitender 3-Tage-Kernpreis, Horizont 2 Tage
-        · Richtungs-Accuracy Test-Set: 67.9% · Baseline: 38.6%
-        · Schwelle &quot;stabil&quot;: ±0.5 Cent · Trainingsperiode: 2019–2023</p>
+        · <strong>Offline-Test (Notebook, Vorzeichen):</strong> Richtungs-Accuracy <strong>{ML_ACC_TEST:.1f} %</strong>
+        · naive Baseline „immer 0“: <strong>{ML_BASE_RICHT:.1f} %</strong> (= Anteil Tage mit Ziel ≤ 0 im Test; kein fester 50-%-Zufallswert)
+        · Vorteil Modell: <strong>+{ML_DELTA_PP:.1f}</strong> Prozentpunkte
+        · Schwelle &quot;stabil&quot; (Dashboard-Log): ±0.5 Cent · Trainingsperiode: 2019–2023</p>
+        <p><strong>Statistische Einordnung:</strong> Die Baseline spiegelt die <em>Verteilung der Zielvariable</em> im Test (Zeitraum siehe Metadaten). Schiefe Verteilungen ergeben niedrige Baselines; ausgewogene Ziele ergeben Werte nahe 50 %. Retrograde KPIs im Tab nutzen eine ±0,5-ct-Klassierung — siehe README Abschnitt 5.7.</p>
         <p><strong>Prognose &amp; Übersicht:</strong>
         Das Modell nutzt den <strong>letzten abgeschlossenen Kerntag</strong> (in der Regel <strong>gestern</strong>). Die Pfeil-Richtung gilt für die <strong>Kernpreis-Ebene</strong> (gleitender 3-Tage-Kernpreis im Training), nicht für den Spot-Cent gegenüber „jetzt“.
         Die <strong>orange Linie</strong> im Chart setzt die Modell-<strong>Richtung</strong> für den <strong>nächsten Öffnungstag</strong> so um, dass pro Uhrzeit-Bin der Abstand zwischen <strong>Kernpreis (P10, 13–20 Uhr)</strong> und <strong>Tageshoch</strong> wie gestern skaliert wird — nicht über das Min/Max der 3h-Bins.</p>

@@ -253,6 +253,9 @@ prognose_json = {
     "modell": metadaten["modell"] if modell is not None else "fallback_heuristik_ohne_pkl",
     "richtung_accuracy_test": metadaten["richtung_accuracy_test"],
     "horizont": metadaten["horizont"],
+    "baseline_richtung_test": metadaten.get("baseline_richtung_test"),
+    "delta_richtung_ueber_baseline_pp": metadaten.get("delta_ueber_baseline"),
+    "baseline_richtung_interpretation": metadaten.get("baseline_richtung_interpretation"),
 }
 
 with open(PROGNOSE_PATH, "w", encoding="utf-8") as f:

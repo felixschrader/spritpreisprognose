@@ -42,6 +42,7 @@
   "r2_test": 0.395,
   "baseline_richtung_test": 49.3,
   "delta_ueber_baseline": 18.9,
+  "baseline_richtung_interpretation": "Naive Referenz: Vorhersage immer 0. Richtungs-Accuracy dann = Anteil Testtage mit Zielvariable ≤ 0 (Vorzeichen y>0 vs y_pred>0). Wert hängt von der Zielverteilung ab, nicht von 50-% Zufall; siehe README 5.7.",
   "rockets_feathers": {
     "brent_steigt_erhoehungen": "37.5%",
     "brent_steigt_senkungen": "30.4%",

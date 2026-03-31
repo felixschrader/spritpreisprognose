@@ -113,6 +113,12 @@ Zeitlicher Split (kein zufälliges Shuffle), um kausale Reihenfolge zu wahren un
 
 Orientierung an den gespeicherten Modell-Metadaten (kann leicht von Lauf zu Lauf variieren), u. a. Richtungsgenauigkeit Test, MAE, R² — als **Entscheidungshilfe**, nicht als Garantie für einen exakten Minutenpreis.
 
+**Baseline „Richtung“ (statistische Einordnung, Notebook / Metadaten):**  
+Verglichen wird die **Vorzeichen-Übereinstimmung** zwischen Zielvariable *y* und Vorhersage *y_pred* (Klassifikations-Accuracy auf den binären Labels „y positiv?“ / „y_pred positiv?“, wie `sklearn.metrics.accuracy_score` auf `(y>0)` und `(y_pred>0)`). Die **naive Referenz** „immer 0 vorhersagen“ liefert dabei eine Trefferquote, die **exakt dem Anteil der Testtage mit y ≤ 0** entspricht — nicht einem festen 50-%-Zufallswert. Schiefe Verteilungen der Zielgröße (z. B. viele positive *y* im Test) ergeben daher **niedrige** Baselines; eine **annähernd symmetrische** Zielverteilung ergibt Baselines **nahe 50 %**. Das ist **plausibel** und spiegelt die **Stichprobe**, nicht einen Fehler der Metrik.  
+Zusätzlich: **Korridor-Metrik** (Richtung stimmt und \(|\,y-\hat{y}\,|\) unter Schwelle, z. B. 0,5 ct) sowie Auswertungen nur bei **relevantem** \(|y|\) (siehe Notebook) — jeweils **andere** Fragestellungen als die reine Vorzeichen-Accuracy.
+
+**Dashboard (Retrograde):** Die Log-Auswertung nutzt für „Richtung korrekt“ eine **±0,5-ct-Klassierung** von Predicted/Actual; das ist bewusst **laienfreundlicher** und **nicht identisch** mit der strengen Vorzeichen-Metrik im Notebook — beide sind konsistent dokumentiert, aber **nicht** dieselbe Zahl.
+
 ### 5.8 Modell-Persistenz
 
 Trainierte Artefakte liegen unter `data/ml/` und werden von Inference-Skripten und dem Dashboard genutzt.
