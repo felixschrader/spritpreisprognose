@@ -1788,7 +1788,7 @@ Kernpreis = p10 der Stundenbins 13–20 Uhr.
 # ─── TAB 4: EDA-Insights ────────────────────────────────────────────────────
 with tab_eda:
     st.markdown(
-        '<div class="section-label">EDA-Insights — Schnellanalyse der Rohdaten</div>',
+        '<div class="section-label">EDA-Insights — Explorative Analyse</div>',
         unsafe_allow_html=True,
     )
 
@@ -1798,67 +1798,160 @@ with tab_eda:
     else:
         df_eda["tag"] = df_eda["stunde"].dt.normalize()
         df_eda["stunde_h"] = df_eda["stunde"].dt.hour
+        df_eda["wochentag"] = df_eda["stunde"].dt.day_name()
+        weekday_order = [
+            "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
+        ]
+        weekday_label = {
+            "Monday": "Mo", "Tuesday": "Di", "Wednesday": "Mi", "Thursday": "Do",
+            "Friday": "Fr", "Saturday": "Sa", "Sunday": "So"
+        }
+        df_eda["wochentag"] = pd.Categorical(df_eda["wochentag"], categories=weekday_order, ordered=True)
 
-        mean_7d = float(df_eda[df_eda["stunde"] >= cutoff_7d]["preis"].mean())
+        window_days = st.slider("EDA-Zeitraum (Tage)", min_value=14, max_value=180, value=60, step=7)
+        cutoff_eda = jetzt_ts.normalize() - pd.Timedelta(days=window_days)
+        df_eda = df_eda[df_eda["stunde"] >= cutoff_eda].copy()
+        if df_eda.empty:
+            st.warning("Keine Daten im gewaehlten EDA-Zeitraum.")
+            st.stop()
+
+        mean_7d = float(df_eda["preis"].mean())
         min_h = int(df_eda.groupby("stunde_h")["preis"].mean().idxmin())
         max_h = int(df_eda.groupby("stunde_h")["preis"].mean().idxmax())
+        vol_ct = float(df_eda["preis"].std() * 100.0)
 
         st.markdown(f"""
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;margin-bottom:1rem">
-            <div class="kpi-card"><div class="kpi-val">{mean_7d:.3f}<span style="font-size:0.75rem"> €</span></div><div class="kpi-lbl">Ø Preis (7 Tage)</div></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;margin-bottom:1rem">
+            <div class="kpi-card"><div class="kpi-val">{mean_7d:.3f}<span style="font-size:0.75rem"> €</span></div><div class="kpi-lbl">Ø Preis ({window_days} Tage)</div></div>
             <div class="kpi-card"><div class="kpi-val">{min_h:02d}:00</div><div class="kpi-lbl">Guenstigste Stunde</div></div>
             <div class="kpi-card"><div class="kpi-val">{max_h:02d}:00</div><div class="kpi-lbl">Teuerste Stunde</div></div>
+            <div class="kpi-card"><div class="kpi-val">{vol_ct:.1f}<span style="font-size:0.75rem"> ct</span></div><div class="kpi-lbl">Volatilitaet (Stdabw.)</div></div>
         </div>
         """, unsafe_allow_html=True)
 
-        col_a, col_b = st.columns(2)
+        sub_t1, sub_t2, sub_t3 = st.tabs(["Zeitmuster", "Verteilung", "Wochenvergleich"])
 
-        with col_a:
-            st.caption("Durchschnittspreis nach Stunde")
-            df_hour = df_eda.groupby("stunde_h")["preis"].mean().reset_index()
-            fig_hour = go.Figure()
-            fig_hour.add_trace(go.Scatter(
-                x=df_hour["stunde_h"], y=df_hour["preis"],
-                mode="lines", line=dict(color="#1565C0", width=2),
-                hovertemplate="Stunde %{x}:00<br>Preis %{y:.3f} €<extra></extra>",
-                name="Preis",
-            ))
-            fig_hour.update_layout(
-                height=280,
-                plot_bgcolor="#FFFFFF",
-                paper_bgcolor="#FFFFFF",
-                margin=dict(l=10, r=10, t=10, b=10),
-                xaxis=dict(title="", gridcolor="#F5F5F5"),
-                yaxis=dict(title="", gridcolor="#F5F5F5", tickformat=".3f"),
-                showlegend=False,
-            )
-            st.plotly_chart(fig_hour, use_container_width=True)
+        with sub_t1:
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.caption("Durchschnittspreis nach Stunde")
+                df_hour = df_eda.groupby("stunde_h", observed=False)["preis"].mean().reset_index()
+                fig_hour = go.Figure()
+                fig_hour.add_trace(go.Scatter(
+                    x=df_hour["stunde_h"], y=df_hour["preis"],
+                    mode="lines", line=dict(color="#1565C0", width=2),
+                    hovertemplate="Stunde %{x}:00<br>Preis %{y:.3f} €<extra></extra>",
+                    name="Preis",
+                ))
+                fig_hour.update_layout(
+                    height=300, plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis=dict(gridcolor="#F5F5F5"),
+                    yaxis=dict(gridcolor="#F5F5F5", tickformat=".3f"),
+                    showlegend=False,
+                )
+                st.plotly_chart(fig_hour, use_container_width=True)
 
-        with col_b:
-            st.caption("Tagesmittel (letzte 30 Tage)")
-            df_day = (
-                df_eda[df_eda["tag"] >= (jetzt_ts.normalize() - pd.Timedelta(days=30))]
-                .groupby("tag")["preis"]
-                .mean()
-                .reset_index()
-            )
-            fig_day = go.Figure()
-            fig_day.add_trace(go.Scatter(
-                x=df_day["tag"], y=df_day["preis"],
-                mode="lines", line=dict(color="#E65100", width=2),
-                hovertemplate="%{x|%d.%m.%Y}<br>Preis %{y:.3f} €<extra></extra>",
-                name="Tages-Ø",
-            ))
-            fig_day.update_layout(
-                height=280,
-                plot_bgcolor="#FFFFFF",
-                paper_bgcolor="#FFFFFF",
-                margin=dict(l=10, r=10, t=10, b=10),
-                xaxis=dict(title="", gridcolor="#F5F5F5"),
-                yaxis=dict(title="", gridcolor="#F5F5F5", tickformat=".3f"),
-                showlegend=False,
-            )
-            st.plotly_chart(fig_day, use_container_width=True)
+            with col_b:
+                st.caption("Tagesmittel (Trend)")
+                df_day = df_eda.groupby("tag", observed=False)["preis"].mean().reset_index()
+                fig_day = go.Figure()
+                fig_day.add_trace(go.Scatter(
+                    x=df_day["tag"], y=df_day["preis"],
+                    mode="lines", line=dict(color="#E65100", width=2),
+                    hovertemplate="%{x|%d.%m.%Y}<br>Preis %{y:.3f} €<extra></extra>",
+                    name="Tages-Ø",
+                ))
+                fig_day.update_layout(
+                    height=300, plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis=dict(gridcolor="#F5F5F5"),
+                    yaxis=dict(gridcolor="#F5F5F5", tickformat=".3f"),
+                    showlegend=False,
+                )
+                st.plotly_chart(fig_day, use_container_width=True)
+
+        with sub_t2:
+            col_c, col_d = st.columns(2)
+            with col_c:
+                st.caption("Preisverteilung pro Stunde (Boxplot)")
+                fig_box = go.Figure()
+                for h in sorted(df_eda["stunde_h"].dropna().unique()):
+                    vals = df_eda.loc[df_eda["stunde_h"] == h, "preis"]
+                    fig_box.add_trace(go.Box(
+                        y=vals,
+                        name=f"{int(h):02d}",
+                        boxpoints=False,
+                        marker_color="#1565C0",
+                        line=dict(width=1),
+                        showlegend=False,
+                    ))
+                fig_box.update_layout(
+                    height=320, plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis=dict(title="Stunde", gridcolor="#F5F5F5"),
+                    yaxis=dict(title="Preis", gridcolor="#F5F5F5", tickformat=".3f"),
+                )
+                st.plotly_chart(fig_box, use_container_width=True)
+
+            with col_d:
+                st.caption("Histogramm (Preisverteilung)")
+                fig_hist = go.Figure()
+                fig_hist.add_trace(go.Histogram(
+                    x=df_eda["preis"], nbinsx=40, marker_color="#E65100", opacity=0.85
+                ))
+                fig_hist.update_layout(
+                    height=320, plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis=dict(title="Preis", gridcolor="#F5F5F5", tickformat=".3f"),
+                    yaxis=dict(title="Anzahl", gridcolor="#F5F5F5"),
+                    bargap=0.03,
+                )
+                st.plotly_chart(fig_hist, use_container_width=True)
+
+        with sub_t3:
+            col_e, col_f = st.columns(2)
+            with col_e:
+                st.caption("Durchschnitt nach Wochentag")
+                df_wd = df_eda.groupby("wochentag", observed=False)["preis"].mean().reset_index()
+                df_wd["wd_short"] = df_wd["wochentag"].map(weekday_label)
+                fig_wd = go.Figure()
+                fig_wd.add_trace(go.Bar(
+                    x=df_wd["wd_short"], y=df_wd["preis"], marker_color="#1565C0"
+                ))
+                fig_wd.update_layout(
+                    height=300, plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis=dict(title="", gridcolor="#F5F5F5"),
+                    yaxis=dict(title="Preis", gridcolor="#F5F5F5", tickformat=".3f"),
+                    showlegend=False,
+                )
+                st.plotly_chart(fig_wd, use_container_width=True)
+
+            with col_f:
+                st.caption("Heatmap: Wochentag x Stunde")
+                piv = (
+                    df_eda.groupby(["wochentag", "stunde_h"], observed=False)["preis"]
+                    .mean()
+                    .reset_index()
+                    .pivot(index="wochentag", columns="stunde_h", values="preis")
+                    .reindex(weekday_order)
+                )
+                fig_heat = go.Figure(data=go.Heatmap(
+                    z=piv.values,
+                    x=[int(c) for c in piv.columns],
+                    y=[weekday_label.get(str(i), str(i)) for i in piv.index],
+                    colorscale="Blues",
+                    colorbar=dict(title="Preis"),
+                    hovertemplate="Tag %{y}<br>Stunde %{x}:00<br>Preis %{z:.3f} €<extra></extra>",
+                ))
+                fig_heat.update_layout(
+                    height=300, plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis=dict(title="Stunde", gridcolor="#F5F5F5"),
+                    yaxis=dict(title="", gridcolor="#F5F5F5"),
+                )
+                st.plotly_chart(fig_heat, use_container_width=True)
 
 # ── Social & Methodik (nach Tabs, vor Footer) ───────────────────────────────
 st.markdown(f"""
