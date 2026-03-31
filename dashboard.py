@@ -3,7 +3,6 @@
 
 import streamlit as st
 import streamlit.components.v1 as components
-import visitor_stats
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -1404,7 +1403,6 @@ st.markdown(
 osm_standort_embed(STATION_LAT, STATION_LON)
 
 TAB_LABELS = ["Preisverlauf", "KPIs", "Modell-Performance", "EDA-Insights"]
-visitor_stats.init_page_view()
 
 tab_pv, tab_kpi, tab_perf, tab_eda = st.tabs(TAB_LABELS)
 
