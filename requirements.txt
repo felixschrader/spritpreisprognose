@@ -13,3 +13,4 @@ joblib
 python-dotenv
 scikit-learn
 yfinance
+tqdm
