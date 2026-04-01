@@ -3,6 +3,25 @@
 TANKERKOENIG_URL = "https://www.tankerkoenig.de"
 TANKERKOENIG_CC_URL = "https://creativecommons.tankerkoenig.de"
 
+# Team (Social-Leiste im Dashboard — Namen/Links zentral)
+SOCIAL_TEAM = {
+    "felix": {
+        "name": "Felix Schrader",
+        "linkedin": "https://www.linkedin.com/in/felixschrader/",
+    },
+    "girandoux": {
+        "name": "Girandoux Fandio Nganwajop",
+        "linkedin": "https://www.linkedin.com/in/girandoux-fandio-08628bb9/",
+    },
+    "ghislain": {
+        "name": "Ghislain Djifag Wamo",
+        "linkedin": (
+            "https://www.linkedin.com/search/results/all/"
+            "?keywords=Ghislain%20Djifag%20Wamo"
+        ),
+    },
+}
+
 
 def messages(lang: str) -> dict:
     return MESSAGES["en"] if lang == "en" else MESSAGES["de"]

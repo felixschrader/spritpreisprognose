@@ -5,7 +5,12 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 
-from dashboard_i18n import TANKERKOENIG_URL, messages, methodology_html
+from dashboard_i18n import (
+    SOCIAL_TEAM,
+    TANKERKOENIG_URL,
+    messages,
+    methodology_html,
+)
 import numpy as np
 import plotly.graph_objects as go
 import requests
@@ -732,18 +737,12 @@ if "ui_lang" not in st.session_state:
     st.session_state.ui_lang = (
         "en" if st.query_params.get("lang", "").lower() == "en" else "de"
     )
-
-lang_col1, lang_col2, _ = st.columns([0.08, 0.08, 0.84])
-with lang_col1:
-    if st.button("🇩🇪", key="lang_btn_de", use_container_width=True):
-        st.session_state.ui_lang = "de"
-        st.query_params["lang"] = "de"
-        st.rerun()
-with lang_col2:
-    if st.button("🇬🇧", key="lang_btn_en", use_container_width=True):
-        st.session_state.ui_lang = "en"
-        st.query_params["lang"] = "en"
-        st.rerun()
+# Deep-Link ?lang=de|en immer mit Session abgleichen
+_q_lang = st.query_params.get("lang", "")
+if isinstance(_q_lang, list) and _q_lang:
+    _q_lang = str(_q_lang[0])
+if isinstance(_q_lang, str) and _q_lang.lower() in ("de", "en"):
+    st.session_state.ui_lang = _q_lang.lower()
 
 LANG = st.session_state.ui_lang
 tx = messages(LANG)
@@ -1317,6 +1316,19 @@ elif "flexibel" in empfehlung_tage:
 else:
     card_cls, badge_cls, badge_txt = "warten", "badge-warten", tx["badge_hold"]
 
+# ── Sprache (über der Topbar, nach Daten/KI — gleiche Reihenfolge wie Anzeige) ─
+_, lang_de, lang_en = st.columns([0.72, 0.14, 0.14])
+with lang_de:
+    if st.button("🇩🇪", key="lang_btn_de", use_container_width=True, type="secondary"):
+        st.session_state.ui_lang = "de"
+        st.query_params["lang"] = "de"
+        st.rerun()
+with lang_en:
+    if st.button("🇬🇧", key="lang_btn_en", use_container_width=True, type="secondary"):
+        st.session_state.ui_lang = "en"
+        st.query_params["lang"] = "en"
+        st.rerun()
+
 # ── TOPBAR ────────────────────────────────────────────────────────────────────
 oeff_rows = "".join(
     f'<div class="topbar-hours-row"><b>{tag}</b> {zeiten}</div>'
@@ -1342,7 +1354,9 @@ st.markdown(f"""
 # Refresh via Query-Parameter (Submit in der Topbar, gleiche Seite)
 if st.query_params.get("refresh") == "1":
     st.cache_data.clear()
+    _lang_keep = st.session_state.get("ui_lang", "de")
     st.query_params.clear()
+    st.query_params["lang"] = _lang_keep
     st.rerun()
 
 st.markdown(
@@ -2205,16 +2219,16 @@ st.markdown(f"""
         <span class="social-ico">{_SVG_GH}</span> {tx["social_github"]}
       </a>
       <span class="social-strip-sep">·</span>
-      <a href="https://www.linkedin.com/in/felixschrader/" target="_blank" rel="noopener noreferrer">
-        <span class="social-ico">{_SVG_IN}</span> Felix Schrader
+      <a href="{SOCIAL_TEAM["felix"]["linkedin"]}" target="_blank" rel="noopener noreferrer">
+        <span class="social-ico">{_SVG_IN}</span> {SOCIAL_TEAM["felix"]["name"]}
       </a>
       <span class="social-strip-sep">·</span>
-      <a href="https://www.linkedin.com/in/girandoux-fandio-08628bb9/" target="_blank" rel="noopener noreferrer">
-        <span class="social-ico">{_SVG_IN}</span> Girandoux Fandio Nganwajop
+      <a href="{SOCIAL_TEAM["girandoux"]["linkedin"]}" target="_blank" rel="noopener noreferrer">
+        <span class="social-ico">{_SVG_IN}</span> {SOCIAL_TEAM["girandoux"]["name"]}
       </a>
       <span class="social-strip-sep">·</span>
-      <a href="https://www.linkedin.com/search/results/all/?keywords=Ghislain%20Djifag%20Wamo" target="_blank" rel="noopener noreferrer">
-        <span class="social-ico">{_SVG_IN}</span> Ghislain Djifag Wamo
+      <a href="{SOCIAL_TEAM["ghislain"]["linkedin"]}" target="_blank" rel="noopener noreferrer">
+        <span class="social-ico">{_SVG_IN}</span> {SOCIAL_TEAM["ghislain"]["name"]}
       </a>
     </div>
   </div>
