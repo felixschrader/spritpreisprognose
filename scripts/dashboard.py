@@ -91,7 +91,7 @@ tx = {
     "tab_kpi": "KPI",
     "tab_perf": "Prognose-Performance",
     "tab_eda": "EDA",
-    "pv_section": "Preisverlauf (3h-Median) & Prognose",
+    "pv_section": "Preisverlauf (3h-Stufen, letzter Preis je Bin) & Prognose",
     "pv_brent_toggle": "Brent-Linie einblenden",
     "pv_brent_cap": "Quelle:",
     "pv_brent_last": "Stand:",
@@ -1136,6 +1136,38 @@ def ist_offen(stunde_h, wochentag):
     else:                # Mo–Fr 06–21:30
         return 6 <= stunde_h < 22
 
+
+def fill_diesel_3h_bins_hv(df_bin: pd.DataFrame, stunde_cap: pd.Timestamp) -> pd.DataFrame:
+    """Fügt fehlende 3h-Stützstellen mit dem zuletzt bekannten Preis ein (lückenlose hv-Linie)."""
+    if df_bin.empty:
+        return df_bin
+    df_bin = df_bin.sort_values("stunde").reset_index(drop=True)
+    out: list[dict] = []
+    for i in range(len(df_bin)):
+        r = df_bin.iloc[i]
+        out.append({"stunde": pd.Timestamp(r["stunde"]), "preis": float(r["preis"])})
+        if i + 1 < len(df_bin):
+            t0 = pd.Timestamp(df_bin.iloc[i]["stunde"])
+            t1 = pd.Timestamp(df_bin.iloc[i + 1]["stunde"])
+            y0 = float(df_bin.iloc[i]["preis"])
+            nxt = t0 + pd.Timedelta(hours=3)
+            while nxt < t1:
+                out.append({"stunde": nxt, "preis": y0})
+                nxt += pd.Timedelta(hours=3)
+    df_out = pd.DataFrame(out).sort_values("stunde").reset_index(drop=True)
+    t_last = pd.Timestamp(df_out.iloc[-1]["stunde"])
+    y_last = float(df_out.iloc[-1]["preis"])
+    cap = pd.Timestamp(stunde_cap)
+    tail: list[dict] = []
+    nxt = t_last + pd.Timedelta(hours=3)
+    while nxt <= cap:
+        tail.append({"stunde": nxt, "preis": y_last})
+        nxt += pd.Timedelta(hours=3)
+    if tail:
+        df_out = pd.concat([df_out, pd.DataFrame(tail)], ignore_index=True)
+    return df_out.sort_values("stunde").reset_index(drop=True)
+
+
 def kw_sonntag_label(so_ts) -> str:
     """Woche Mo–So, Schlüssel Sonntag: KW (ISO) + Datumsbereich für Diagrammachsen."""
     so = pd.Timestamp(so_ts).normalize()
@@ -1684,20 +1716,28 @@ with tab_pv:
         else:
             st.caption(f"{tx['pv_brent_cap']} {brent_source} · {tx['pv_brent_none']}")
 
-    # 3h-Bins für historischen Verlauf
-    df_hist_bin = df_hist.copy()
-    df_hist_bin["stunde_bin"] = df_hist_bin["stunde"].dt.floor("3h")
-    df_hist_bin = df_hist_bin.groupby("stunde_bin")["preis"].mean().reset_index()
-    df_hist_bin = df_hist_bin.rename(columns={"stunde_bin": "stunde"})
-
-    fig = go.Figure()
+    # 3h-Bins: letzter Preis je Bin (wie Live-Kachel), nicht Mittelwert — sonst Abweichung zur Kachel.
+    df_hist_bin_sparse = df_hist.copy()
+    df_hist_bin_sparse["stunde_bin"] = df_hist_bin_sparse["stunde"].dt.floor("3h")
+    df_hist_bin_sparse = (
+        df_hist_bin_sparse.groupby("stunde_bin")["preis"].last().reset_index()
+        .rename(columns={"stunde_bin": "stunde"})
+    )
     aktueller_bin_start = jetzt_ts.floor("3h")
     aktueller_bin_ende = aktueller_bin_start + pd.Timedelta(hours=3)
-    fig.add_trace(go.Scatter(
-        x=df_hist_bin["stunde"], y=df_hist_bin["preis"],
-        mode="lines", name=tx["legend_diesel"],
-        line=dict(color="#BDBDBD", width=1.5, shape="hv"),
-    ))
+    df_hist_bin = fill_diesel_3h_bins_hv(df_hist_bin_sparse, aktueller_bin_start)
+
+    fig = go.Figure()
+    # Eine durchgehende graue hv-Linie inkl. aktuellem Bin bis Live-Preis (keine Trace-Lücke).
+    if not df_hist_bin.empty:
+        y_bin_end = float(df_hist_bin.iloc[-1]["preis"])
+        x_die = list(df_hist_bin["stunde"]) + [aktueller_bin_ende, aktueller_bin_ende]
+        y_die = list(df_hist_bin["preis"]) + [y_bin_end, letzter_preis]
+        fig.add_trace(go.Scatter(
+            x=x_die, y=y_die,
+            mode="lines", name=tx["legend_diesel"],
+            line=dict(color="#BDBDBD", width=1.5, shape="hv"),
+        ))
 
     # Optional: Brent-Futures als Linie (EUR/Barrel), nur bis letztem bekannten Datenpunkt.
     if show_brent and not df_brent.empty:
@@ -1713,17 +1753,6 @@ with tab_pv:
                 yaxis="y2",
                 line=dict(color="#2E7D32", width=1.3),
             ))
-    # Aktuellen Bin bis zum rechten Rand "schließen" und dort auf den Live-Preis springen.
-    df_bin_now = df_hist_bin[df_hist_bin["stunde"] <= aktueller_bin_start]
-    if not df_bin_now.empty:
-        aktueller_bin_preis = float(df_bin_now.iloc[-1]["preis"])
-        fig.add_trace(go.Scatter(
-            x=[aktueller_bin_start, aktueller_bin_ende, aktueller_bin_ende],
-            y=[aktueller_bin_preis, aktueller_bin_preis, letzter_preis],
-            mode="lines", showlegend=False,
-            line=dict(color="#BDBDBD", width=1.5, shape="hv"),
-            hoverinfo="skip",
-        ))
 
     # Tages-Mittelwert (Kalendertag). Für heute: bis "jetzt".
     # Darstellung nur innerhalb der Öffnungszeiten (keine "Nacht-Linie").
@@ -1733,7 +1762,7 @@ with tab_pv:
     if not df_hist_day.empty:
         heute_norm = jetzt_ts.normalize()
         df_past = df_hist_day[df_hist_day["tag"] < heute_norm]
-        df_hist_bin_day = df_hist_bin.copy()
+        df_hist_bin_day = df_hist_bin_sparse.copy()
         df_hist_bin_day["tag"] = df_hist_bin_day["stunde"].dt.normalize()
         bin_bounds = (
             df_hist_bin_day.groupby("tag")["stunde"]
@@ -2410,7 +2439,7 @@ eine <strong>stündliche Kurzprognose</strong> (Random Forest, mehrere Features 
 und eine <strong>tagesbasierte ML-Prognose</strong> (Random Forest, Ziel Δ über Kernpreis-Horizont wie im Notebook).</p>
 <p>Offline-Referenz Richtung (Test): ca. <strong>{ML_ACC_TEST:.0f} %</strong> Trefferquote vs.
 Baseline „immer steigend“ ca. <strong>{ML_BASE_RICHT:.0f} %</strong> (Differenz rund <strong>{ML_DELTA_PP:.0f}</strong> Prozentpunkte).</p>
-<p>Charts nutzen 3h-Mediane und Öffnungszeiten-Filter; genaue Definitionen stehen im Repository-Notebook und in den Skripten.</p>
+<p>Charts nutzen 3h-Stufen (letzter Preis je Bin) und Öffnungszeiten-Filter; genaue Definitionen stehen im Repository-Notebook und in den Skripten.</p>
 """
 st.markdown(f"""
 <div class="social-info-wrap">
