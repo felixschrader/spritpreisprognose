@@ -86,6 +86,7 @@ tx = {
     "kpi_vol_lbl": "Ø Tagesvolatilität",
     "kpi_cap_range": "Zeitraum: {a} – {b}",
     "kpi_cap_chg_def": "Preiswechsel = nur echte Sprünge im Preis (nicht jede Messung); nur während Öffnungszeiten.",
+    "kpi_cap_kpi_src": "KPI-Zeitreihe: Parquet + Live-Log mit Original-Zeitstempeln (ohne 3h-Bins wie im Preisverlauf).",
     "kpi_sec_chg": "Preiswechsel pro Tag",
     "kpi_legend_chg": "Anzahl Sprünge",
     "kpi_hover_chg": "%{x|%d.%m.}<br>%{y} Wechsel<extra></extra>",
@@ -1148,6 +1149,16 @@ if not df_live_raw.empty and "timestamp" in df_live_raw.columns:
 else:
     df_live = pd.DataFrame(columns=["stunde", "preis"])
 
+# Roh-Messpunkte für KPI (Volatilität / Preiswechsel): keine 3h-Aggregation
+df_kpi_preise = df_ext.copy()
+if not df_live.empty:
+    df_kpi_preise = (
+        pd.concat([df_kpi_preise, df_live[["stunde", "preis"]]], ignore_index=True)
+        .drop_duplicates("stunde", keep="last")
+        .sort_values("stunde")
+        .reset_index(drop=True)
+    )
+
 if not df_live.empty:
     binned = df_live.copy()
     binned["stunde"] = binned["stunde"].dt.floor("3h")
@@ -1498,21 +1509,23 @@ with tab_kpi:
     cutoff_kpi = tag_end_ts - pd.Timedelta(days=13)
     cutoff_14d = cutoff_kpi
 
-    # Volatilität: ganzer Tag aus voller Zeitreihe. Preiswechsel: nur echte Sprünge |Δpreis|>ε,
-    # nicht „Anzahl Messpunkte“ (delta.count() zählt auch Δ=0 → künstlich ~40/Tag).
-    df_ext_14 = df_ext[
-        (df_ext["stunde"] >= cutoff_14d) &
-        (df_ext["stunde"].dt.date < heute_datum)
+    # KPI nur aus df_kpi_preise (Parquet + Roh-Live), nicht aus 3h-gebinntem df_ext.
+    # Volatilität: ganzer Tag. Preiswechsel: echte Sprünge |Δpreis|>ε (Öffnungszeiten).
+    df_kpi_14 = df_kpi_preise[
+        (df_kpi_preise["stunde"] >= cutoff_14d) &
+        (df_kpi_preise["stunde"].dt.date < heute_datum)
     ].copy().sort_values("stunde")
-    df_ext_14["tag"] = df_ext_14["stunde"].dt.date
+    df_kpi_14["tag"] = df_kpi_14["stunde"].dt.date
+
+    alle_kpi_tage = pd.date_range(cutoff_kpi, tag_end_ts, freq="D").normalize()
 
     _eps_sw = 1e-6  # EUR/l, unter typischer Tankstellen-Schrittweite; filtert Float-Rauschen
-    _h = df_ext_14["stunde"].dt.hour.to_numpy()
-    _wd = df_ext_14["stunde"].dt.dayofweek.to_numpy()
+    _h = df_kpi_14["stunde"].dt.hour.to_numpy()
+    _wd = df_kpi_14["stunde"].dt.dayofweek.to_numpy()
     _mo_fr = (_wd < 5) & (_h >= 6) & (_h < 22)
     _sa_so = (_wd >= 5) & (_h >= 7) & (_h < 21)
     _mask_oeff = _mo_fr | _sa_so
-    df_chg_14 = df_ext_14.loc[_mask_oeff, ["stunde", "preis"]].copy()
+    df_chg_14 = df_kpi_14.loc[_mask_oeff, ["stunde", "preis"]].copy()
     df_chg_14["tag"] = df_chg_14["stunde"].dt.date
     df_chg_14["delta"] = df_chg_14.groupby("tag", group_keys=False)["preis"].diff()
     df_chg_14["ist_sprung"] = df_chg_14["delta"].notna() & (
@@ -1522,18 +1535,18 @@ with tab_kpi:
         n_aenderungen=("ist_sprung", "sum"),
     )
     df_vol = (
-        df_ext_14.groupby("tag", as_index=False).agg(preis=("preis", "std"))
-        if not df_ext_14.empty
+        df_kpi_14.groupby("tag", as_index=False).agg(preis=("preis", "std"))
+        if not df_kpi_14.empty
         else pd.DataFrame(columns=["tag", "preis"])
     )
 
-    alle_kpi_tage = pd.date_range(cutoff_kpi, tag_end_ts, freq="D").normalize()
     df_tag["tag"] = pd.to_datetime(df_tag["tag"]).dt.normalize()
     df_tag = (
         pd.DataFrame({"tag": alle_kpi_tage})
         .merge(df_tag, on="tag", how="left")
         .assign(n_aenderungen=lambda d: d["n_aenderungen"].fillna(0).astype(int))
     )
+    # Ø über alle 14 angezeigten Kalendertage (fehlende Tage = 0 Wechsel)
     aend_tag = float(df_tag["n_aenderungen"].mean()) if not df_tag.empty else 0.0
 
     if not df_vol.empty:
@@ -1542,10 +1555,10 @@ with tab_kpi:
         pd.DataFrame({"tag": alle_kpi_tage})
         .merge(df_vol, on="tag", how="left")
     )
-    df_vol_plot["preis"] = df_vol_plot["preis"].fillna(0.0)
+    # Karten-Ø: alle 14 Tage; Tage ohne Messpunkte zählen als 0 ct Volatilität
     volatilitaet = (
-        float(df_ext_14.groupby("tag")["preis"].std().mean())
-        if not df_ext_14.empty
+        float(df_vol_plot["preis"].fillna(0.0).mean())
+        if not df_vol_plot.empty
         else 0.0
     )
 
@@ -1584,6 +1597,7 @@ with tab_kpi:
         )
     )
     st.caption(tx["kpi_cap_chg_def"])
+    st.caption(tx["kpi_cap_kpi_src"])
 
     # Preiswechsel / Tag
     st.markdown(f'<div class="section-label">{tx["kpi_sec_chg"]}</div>',
@@ -1604,11 +1618,12 @@ with tab_kpi:
                 unsafe_allow_html=True)
     fig6_kpi = go.Figure()
     if not df_vol_plot.empty:
+        _y_vol = df_vol_plot["preis"] * 100
         fig6_kpi.add_trace(go.Scatter(
-            x=df_vol_plot["tag"], y=df_vol_plot["preis"] * 100,
+            x=df_vol_plot["tag"], y=_y_vol,
             mode="lines", name=tx["kpi_legend_vol"],
             line=dict(color="#E65100", width=1.5),
-            fill="tozeroy", fillcolor="rgba(230,81,0,0.08)",
+            connectgaps=False,
             hovertemplate=tx["kpi_hover_vol"],
         ))
     fig6_kpi.update_layout(**BASE_L, height=200,
