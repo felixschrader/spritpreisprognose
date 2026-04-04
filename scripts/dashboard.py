@@ -754,6 +754,21 @@ def _tk_parse_diesel(v) -> float | None:
     return None
 
 
+def _tk_diesel_prices_node(node: dict) -> float | None:
+    """prices.php-Eintrag: bei status=closed keinen (veralteten) Diesel anzeigen."""
+    if not isinstance(node, dict) or node.get("status") == "closed":
+        return None
+    return _tk_parse_diesel(node.get("diesel"))
+
+
+def _tk_diesel_detail_station(st: dict | None) -> float | None:
+    if not isinstance(st, dict):
+        return None
+    if st.get("isOpen") is False and st.get("diesel") in (None, False):
+        return None
+    return _tk_parse_diesel(st.get("diesel"))
+
+
 def letzter_preis_aus_zeitreihe(
     df_ext: pd.DataFrame, jetzt: pd.Timestamp, max_hours: float = 120.0
 ) -> float | None:
@@ -775,7 +790,7 @@ def letzter_preis_aus_zeitreihe(
 
 
 def letzter_preis_aus_live_log(
-    df_raw: pd.DataFrame, jetzt: pd.Timestamp, max_hours: float = 72.0
+    df_raw: pd.DataFrame, jetzt: pd.Timestamp, max_hours: float = 96.0
 ) -> float | None:
     if df_raw.empty or not {"timestamp", "preis"}.issubset(df_raw.columns):
         return None
@@ -829,13 +844,11 @@ def lade_aktueller_preis():
     for path, parser in (
         (
             f"https://creativecommons.tankerkoenig.de/json/detail.php?id={STATION_UUID}&apikey={key}",
-            lambda js: _tk_parse_diesel(st.get("diesel"))
-            if isinstance((st := js.get("station")), dict)
-            else None,
+            lambda js: _tk_diesel_detail_station(js.get("station")),
         ),
         (
             f"https://creativecommons.tankerkoenig.de/json/prices.php?ids={STATION_UUID}&apikey={key}",
-            lambda js: _tk_parse_diesel((js.get("prices") or {}).get(STATION_UUID, {}).get("diesel")),
+            lambda js: _tk_diesel_prices_node((js.get("prices") or {}).get(STATION_UUID, {})),
         ),
     ):
         try:

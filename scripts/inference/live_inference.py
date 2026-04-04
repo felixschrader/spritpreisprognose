@@ -21,6 +21,69 @@ TANKERKOENIG_KEY = os.getenv("TANKERKOENIG_KEY")
 BERLIN       = pytz.timezone("Europe/Berlin")
 JETZT        = datetime.now(BERLIN)
 STATION_UUID = "e1aefc4e-3ca1-4018-8d91-455b69d35d41"
+LOG_PATH     = "data/ml/preis_live_log.csv"
+_TK_HEADERS  = {"User-Agent": "dieselpreisprognose-live_inference/1.0"}
+
+
+def _parse_diesel_wert(v) -> float | None:
+    if v is None or v is False:
+        return None
+    try:
+        x = float(v)
+        if 0.3 <= x <= 5.0:
+            return x
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+def _diesel_aus_prices_node(data: dict) -> float | None:
+    if not data or data.get("status") == "closed":
+        return None
+    return _parse_diesel_wert(data.get("diesel"))
+
+
+def letzter_preis_aus_live_log(
+    jetzt_berlin: datetime, path: str = LOG_PATH, max_stunden: float = 72.0
+) -> float | None:
+    """Letzter geloggter Preis, wenn Eintrag nicht zu alt (z. B. nach Schließung besser als altes Parquet)."""
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            zeilen = list(csv.DictReader(f))
+        if not zeilen:
+            return None
+        last = zeilen[-1]
+        ts_naive = datetime.strptime(last["timestamp"], "%Y-%m-%d %H:%M")
+        ts = BERLIN.localize(ts_naive)
+        alter_h = (jetzt_berlin - ts).total_seconds() / 3600.0
+        if alter_h > max_stunden or alter_h < -0.02:
+            return None
+        return float(last["preis"])
+    except Exception:
+        return None
+
+
+def detail_preis_aral() -> float | None:
+    if not TANKERKOENIG_KEY:
+        return None
+    try:
+        u = (
+            "https://creativecommons.tankerkoenig.de/json/detail.php"
+            f"?id={STATION_UUID}&apikey={TANKERKOENIG_KEY}"
+        )
+        r = requests.get(u, timeout=12, headers=_TK_HEADERS)
+        r.raise_for_status()
+        js = r.json()
+        st = js.get("station")
+        if not isinstance(st, dict):
+            return None
+        if st.get("isOpen") is False and st.get("diesel") in (None, False):
+            return None
+        return _parse_diesel_wert(st.get("diesel"))
+    except Exception:
+        return None
 
 # --- Schritt 1: Metadaten laden ---
 metadaten    = json.load(open("data/ml/modell_metadaten_aral_duerener.json"))
@@ -62,27 +125,44 @@ for i in range(0, len(alle_uuids), batch_size):
     batch    = alle_uuids[i:i + batch_size]
     ids_str  = ",".join(batch)
     url      = f"https://creativecommons.tankerkoenig.de/json/prices.php?ids={ids_str}&apikey={TANKERKOENIG_KEY}"
-    response = requests.get(url, timeout=10)
-    live_preise.update(response.json()["prices"])
+    response = requests.get(url, timeout=12, headers=_TK_HEADERS)
+    live_preise.update(response.json().get("prices") or {})
 
 # --- Schritt 3: Historische Preise laden als Fallback ---
 preise_hist = pd.read_parquet("data/tankstellen_preise.parquet")
 preise_hist = preise_hist[preise_hist["station_uuid"].isin(alle_uuids) & preise_hist["diesel"].notna()].copy()
 preise_hist["date"] = pd.to_datetime(preise_hist["date"])
 
+log_sticky = letzter_preis_aus_live_log(JETZT)
+detail_aral = detail_preis_aral()
+
+
 def get_preis(uuid, live_preise, preise_hist):
-    """Gibt aktuellen Diesel-Preis zurück — live wenn verfügbar, sonst letzter bekannter."""
-    data = live_preise.get(uuid, {})
-    if data.get("status") != "closed" and data.get("diesel") is not None:
-        return float(data["diesel"])
+    """Diesel: prices.php → (nur ARAL) detail.php → Log-Sticky → Parquet."""
+    data = live_preise.get(uuid, {}) or {}
+    p = _diesel_aus_prices_node(data)
+    if p is not None:
+        return p
+    if uuid == STATION_UUID:
+        if detail_aral is not None:
+            return detail_aral
+        if log_sticky is not None:
+            return log_sticky
     hist = preise_hist[preise_hist["station_uuid"] == uuid].sort_values("date")
     if len(hist) > 0:
         return float(hist["diesel"].iloc[-1])
     return None
 
+
 # Preise sammeln
 preis_dict = {uuid: get_preis(uuid, live_preise, preise_hist) for uuid in alle_uuids}
 preis_aral = preis_dict[STATION_UUID]
+if preis_aral is None:
+    preis_aral = letzter_preis_aus_live_log(JETZT)
+if preis_aral is None:
+    raise SystemExit(
+        "Kein Dieselpreis für die ARAL ermittelbar (Tankerkönig API, Log und Parquet leer)."
+    )
 
 nachbar_preise = [v for k, v in preis_dict.items() if k != STATION_UUID and v is not None]
 
@@ -272,20 +352,32 @@ else:
     begruendung = "Peak und weiter steigend — wenn nötig jetzt, sonst morgen früh"
 
 # --- Schritt 11: Live-Log ---
-LOG_PATH = "data/ml/preis_live_log.csv"
-
+# Pro Stunde mindestens eine Zeile (auch bei gleichem Preis), damit Rohdaten auf GitHub nicht „eingefroren“ wirken.
 letzter_log_preis = None
+letzter_log_stunde = None
 if os.path.exists(LOG_PATH):
-    with open(LOG_PATH, "r") as f:
+    with open(LOG_PATH, newline="", encoding="utf-8") as f:
         zeilen = list(csv.DictReader(f))
         if zeilen:
             letzter_log_preis = float(zeilen[-1]["preis"])
+            try:
+                letzter_log_stunde = datetime.strptime(
+                    zeilen[-1]["timestamp"], "%Y-%m-%d %H:%M"
+                ).replace(minute=0, second=0, microsecond=0)
+            except Exception:
+                letzter_log_stunde = None
 
-preis_geaendert = (letzter_log_preis is None) or (abs(preis_aral - letzter_log_preis) > 0.001)
+jetzt_naiv = JETZT.replace(tzinfo=None)
+aktuelle_stunde_log = jetzt_naiv.replace(minute=0, second=0, microsecond=0)
 
-if preis_geaendert:
+preis_geaendert = (letzter_log_preis is None) or (
+    abs(preis_aral - letzter_log_preis) > 0.001
+)
+neue_stunde = (letzter_log_stunde is None) or (aktuelle_stunde_log > letzter_log_stunde)
+
+if preis_geaendert or neue_stunde:
     datei_existiert = os.path.exists(LOG_PATH)
-    with open(LOG_PATH, "a", newline="") as f:
+    with open(LOG_PATH, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["timestamp", "preis", "richtung_6h", "richtung_12h"])
         if not datei_existiert:
             writer.writeheader()
@@ -295,9 +387,12 @@ if preis_geaendert:
             "richtung_6h":  richtung_6h,
             "richtung_12h": richtung_12h,
         })
-    print(f"Live-Log aktualisiert: {preis_aral:.3f} € ({JETZT.strftime('%H:%M')})")
+    print(
+        f"Live-Log: {preis_aral:.3f} € ({JETZT.strftime('%H:%M')})"
+        + (" — neuer Preis" if preis_geaendert else " — Stunden-Tick")
+    )
 else:
-    print(f"Preis unverändert ({preis_aral:.3f} €) — kein Log-Eintrag")
+    print(f"Live-Log: übersprungen (gleiche Stunde, Preis {preis_aral:.3f} € unverändert)")
 
 # --- Schritt 12: JSON speichern ---
 prognose = {
