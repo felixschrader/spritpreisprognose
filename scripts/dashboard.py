@@ -101,11 +101,13 @@ tx = {
     "perf_no_log": "Kein Prognose-Log geladen.",
     "perf_acc_3w": "Trefferquote 3 Wo.",
     "perf_ok_3w": "Korrekt / Tage",
-    "perf_mae_3w": "MAE Δ (ct)",
     "perf_acc_nb": "Richtung (Test, NB)",
     "perf_baseline": "Baseline Richtung",
     "perf_cal_title": "Kalender (Richtung)",
-    "perf_cal_cap": "Kacheln: P = Vorhersage ct, A = Ist ct (Log). Nur Tage mit ausgewerteter Ist-Größe.",
+    "perf_cal_cap": (
+        "Kacheln: P / A = vorhergesagte bzw. tatsächliche Tages-Δ in Cent (im Log als €/l, Anzeige ×100). "
+        "Nur Tage mit Richtungsauswertung. Kalender endet am letzten ausgewerteten Tag (gestern)."
+    ),
     "cal_weekdays": ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
     "perf_weekly_title": "Trefferquote nach Woche",
     "perf_bar_hover": "Trefferquote",
@@ -115,7 +117,10 @@ tx = {
     "perf_hover_pred": "%{x|%d.%m.}<br>Vorhersage: %{y:.1f} ct<extra></extra>",
     "perf_trace_act": "Ist",
     "perf_hover_act": "%{x|%d.%m.}<br>Ist: %{y:.1f} ct<extra></extra>",
-    "perf_band_cap": "Grauer Streifen: ±0,5 ct um 0.",
+    "perf_band_cap": (
+        "Δ in Cent: Spalten `predicted_delta` / `actual_delta` im Log sind €/l → Anzeige ×100. "
+        "Grauer Streifen: ±0,5 ct um 0."
+    ),
     "social_github": "GitHub",
     "footer_price": "Preisdaten:",
     "footer_mtsk": "MTS-K",
@@ -1658,22 +1663,14 @@ with tab_perf:
             (df_pl["_tag"] >= d0) & (df_pl["_tag"] <= d1)
         ].copy().sort_values("datum")
         min_14 = heute_date - timedelta(days=14)
-        df_log_14 = df_pl[df_pl["_tag"] >= min_14].copy().sort_values("datum")
+        df_log_14 = df_pl[
+            (df_pl["_tag"] >= min_14) & (df_pl["_tag"] <= gestern_date)
+        ].copy().sort_values("datum")
 
         df_log_3w_ric = df_log_3w.dropna(subset=["richtung_korrekt"])
         n_tage = len(df_log_3w_ric)
         n_korrekt = int(df_log_3w_ric["richtung_korrekt"].sum()) if n_tage > 0 else 0
         acc_3w = df_log_3w_ric["richtung_korrekt"].mean() * 100 if n_tage > 0 else 0
-        df_log_3w_mae = df_log_3w.dropna(subset=["predicted_delta", "actual_delta"])
-        mae_3w = (
-            df_log_3w_mae["actual_delta"]
-            .sub(df_log_3w_mae["predicted_delta"])
-            .abs()
-            .mean()
-            * 100
-            if len(df_log_3w_mae) > 0
-            else 0
-        )
 
         st.markdown(f"""
         <div class="kpi-grid">
@@ -1684,10 +1681,6 @@ with tab_perf:
             <div class="kpi-card">
                 <div class="kpi-val">{n_korrekt}/{n_tage}</div>
                 <div class="kpi-lbl">{tx["perf_ok_3w"]}</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-val">{mae_3w:.2f}<span style="font-size:0.75rem"> ct</span></div>
-                <div class="kpi-lbl">{tx["perf_mae_3w"]}</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-val">{ML_ACC_TEST:.1f}<span style="font-size:0.75rem">%</span></div>
@@ -1717,7 +1710,10 @@ with tab_perf:
             return "→"
 
         fd = pd.Timestamp(montag_4w_start).date()
-        ld = pd.Timestamp(sonntag_woche_aktuell).date()
+        # Keine leeren Kacheln für Tage nach dem letzten ausgewerteten Kalendertag (gestern)
+        ld = min(pd.Timestamp(sonntag_woche_aktuell).date(), gestern_date)
+        if ld < fd:
+            ld = fd
         alle_tage = [fd + timedelta(days=i) for i in range((ld - fd).days + 1)]
         log_dict = {
             r["_tag"]: r
