@@ -1168,6 +1168,42 @@ def fill_diesel_3h_bins_hv(df_bin: pd.DataFrame, stunde_cap: pd.Timestamp) -> pd
     return df_out.sort_values("stunde").reset_index(drop=True)
 
 
+def diesel_hist_pad_heute_3h_raster(
+    df_hist: pd.DataFrame, jetzt_ts: pd.Timestamp, letzter_preis: float
+) -> pd.DataFrame:
+    """Pro 3h-Marke heute (Tankstelle offen) einen Punkt mit dem aktuellen Preis ergänzen.
+
+    Ohne neue API-Zeilen bei Preisgleichheit fehlen sonst ganze Nachmittags-Bins im Diagramm.
+    """
+    if letzter_preis is None or float(letzter_preis) <= 0:
+        return df_hist
+    jetzt_ts = pd.Timestamp(jetzt_ts)
+    heute = jetzt_ts.normalize()
+    cap_bin = jetzt_ts.floor("3h")
+    stamps = pd.date_range(heute, cap_bin, freq="3h")
+    extras: list[dict] = []
+    for ts in stamps:
+        ts = pd.Timestamp(ts)
+        if ts.normalize() != heute:
+            continue
+        h, wd = int(ts.hour), int(ts.dayofweek)
+        if not ist_offen(h, wd):
+            continue
+        extras.append({"stunde": ts, "preis": float(letzter_preis)})
+    if not extras:
+        return df_hist
+    df_e = pd.DataFrame(extras)
+    if df_hist.empty:
+        base = pd.DataFrame(columns=["stunde", "preis"])
+    else:
+        base = df_hist[["stunde", "preis"]].copy()
+    merged = pd.concat([base, df_e], ignore_index=True)
+    merged = merged.sort_values("stunde").drop_duplicates(subset=["stunde"], keep="last")
+    merged["stunde_h"] = merged["stunde"].dt.hour
+    merged["wochentag"] = merged["stunde"].dt.dayofweek
+    return merged.reset_index(drop=True)
+
+
 def kw_sonntag_label(so_ts) -> str:
     """Woche Mo–So, Schlüssel Sonntag: KW (ISO) + Datumsbereich für Diagrammachsen."""
     so = pd.Timestamp(so_ts).normalize()
@@ -1717,7 +1753,9 @@ with tab_pv:
             st.caption(f"{tx['pv_brent_cap']} {brent_source} · {tx['pv_brent_none']}")
 
     # 3h-Bins: letzter Preis je Bin (wie Live-Kachel), nicht Mittelwert — sonst Abweichung zur Kachel.
-    df_hist_bin_sparse = df_hist.copy()
+    # Heute: 3h-Raster mit letztem Preis auffüllen (API loggt oft nicht, wenn der Preis gleich bleibt).
+    df_hist_fuer_pv = diesel_hist_pad_heute_3h_raster(df_hist, jetzt_ts, letzter_preis)
+    df_hist_bin_sparse = df_hist_fuer_pv.copy()
     df_hist_bin_sparse["stunde_bin"] = df_hist_bin_sparse["stunde"].dt.floor("3h")
     df_hist_bin_sparse = (
         df_hist_bin_sparse.groupby("stunde_bin")["preis"].last().reset_index()
