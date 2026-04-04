@@ -9,12 +9,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 
-from dashboard_i18n import (
-    SOCIAL_TEAM,
-    TANKERKOENIG_URL,
-    messages,
-    methodology_html,
-)
 import numpy as np
 import plotly.graph_objects as go
 import requests
@@ -53,6 +47,131 @@ BERLIN       = pytz.timezone("Europe/Berlin")
 OEFFNUNG_VON = 6   # 06:00 Uhr
 OEFFNUNG_BIS = 22  # konservativ für 3h-Bins / Charts (Schluss je nach Wochentag s. ist_offen)
 
+TANKERKOENIG_URL = "https://creativecommons.tankerkoenig.de/"
+SOCIAL_TEAM = {
+    "felix": {"name": "Felix Schrader", "linkedin": "https://www.linkedin.com/in/felixschrader/"},
+    "girandoux": {
+        "name": "Girandoux Fandio Nganwajop",
+        "linkedin": "https://www.linkedin.com/in/girandoux-fandio-08628bb9/",
+    },
+    "ghislain": {
+        "name": "Ghislain Djifag Wamo",
+        "linkedin": "https://www.linkedin.com/search/results/all/?keywords=Ghislain%20Djifag%20Wamo",
+    },
+}
+
+tx = {
+    "map_fs": "Vollbild",
+    "map_fs_exit": "Vollbild beenden",
+    "map_marker": "Tankstelle",
+    "map_aria": "Karte Tankstelle und Kölner Dom",
+    "badge_fill_now": "Jetzt",
+    "badge_wait": "Später",
+    "badge_flexible": "Flexibel",
+    "badge_hold": "Beobachten",
+    "opening": [
+        ("Mo–Fr", "06:00–21:30"),
+        ("Sa–So", "07:00–21:00"),
+    ],
+    "topbar_title": "Dieselpreis · Köln",
+    "topbar_aral_link": "Station",
+    "topbar_live": "Live",
+    "topbar_refresh": "Aktualisieren",
+    "section_glance": "Auf einen Blick",
+    "unchanged_tpl": "Letzte API-Meldung vor {mins} Min. · typ. Wechsel alle ~{typ} Min.",
+    "unchanged_short": "Letzte Meldung vor {mins} Min.",
+    "card_avg_yesterday": "Ø gestern",
+    "card_current": "Jetzt",
+    "vs_avg_yesterday": "ct vs. Ø gestern",
+    "card_model_dir": "Modell (Tagesrichtung)",
+    "ki_footer": "Kurzkommentar (KI, Haiku) · ",
+    "section_location": "Standort",
+    "map_station_line": "Karte · ",
+    "tab_price": "Preisverlauf",
+    "tab_kpi": "KPI",
+    "tab_perf": "Prognose-Performance",
+    "tab_eda": "EDA",
+    "pv_section": "Preisverlauf (3h-Median) & Prognose",
+    "pv_brent_toggle": "Brent-Linie einblenden",
+    "pv_brent_cap": "Quelle:",
+    "pv_brent_last": "Stand:",
+    "pv_brent_none": "Keine Intraday-Daten",
+    "legend_diesel": "Diesel",
+    "legend_brent": "Brent (USD)",
+    "legend_day_avg": "Tagesmittel",
+    "legend_forecast": "Prognose (Modell)",
+    "yaxis_diesel": "Diesel €/l",
+    "yaxis_brent": "Brent USD",
+    "kpi_section": "Kennzahlen (letzte 7 Tage, Öffnungszeiten)",
+    "kpi_chg_lbl": "Ø Änderungen/Tag",
+    "kpi_vol_lbl": "Ø Tagesvolatilität",
+    "kpi_mc_lbl": "Ø Morning–Close ct",
+    "kpi_cap_range": "Zeitraum: {a} – {b}",
+    "kpi_sec_chg": "Preisänderungen pro Tag",
+    "kpi_legend_chg": "Anzahl Änderungen",
+    "kpi_hover_chg": "%{x|%d.%m.}<br>%{y} Änderungen<extra></extra>",
+    "kpi_sec_vol": "Volatilität (ganzer Tag, inkl. Morning-Spike)",
+    "kpi_legend_vol": "Std. je Tag (ct)",
+    "kpi_hover_vol": "%{x|%d.%m.}<br>%{y:.1f} ct<extra></extra>",
+    "kpi_sec_mc": "Morning-Spike vs. Closing Abstand",
+    "kpi_legend_mc": "Abstand ct",
+    "kpi_hover_mc": "%{x|%d.%m.}<br>%{y:.1f} ct<extra></extra>",
+    "perf_section": "Modell-Performance (Log)",
+    "perf_cap": (
+        "Richtungstreffer aus `prognose_log.csv` (Vorzeichen Δ). "
+        "Notebook-Test: ~{acc:.0f} % vs. Baseline ~{base:.0f} %."
+    ),
+    "perf_no_log": "Kein Prognose-Log geladen.",
+    "perf_acc_3w": "Trefferquote 3 Wo.",
+    "perf_ok_3w": "Korrekt / Tage",
+    "perf_mae_3w": "MAE Δ (ct)",
+    "perf_acc_nb": "Richtung (Test, NB)",
+    "perf_baseline": "Baseline Richtung",
+    "perf_cal_title": "Kalender (Richtung)",
+    "perf_cal_cap": "Kacheln: P = Vorhersage ct, A = Ist ct (Log). Nur Tage mit ausgewerteter Ist-Größe.",
+    "cal_weekdays": ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
+    "perf_weekly_title": "Trefferquote nach Woche",
+    "perf_bar_hover": "Trefferquote",
+    "perf_bar_days": "Tage",
+    "perf_pred_actual_title": "Vorhersage vs. Ist (Δ, ct)",
+    "perf_trace_pred": "Vorhergesagt",
+    "perf_hover_pred": "%{x|%d.%m.}<br>Vorhersage: %{y:.1f} ct<extra></extra>",
+    "perf_trace_act": "Ist",
+    "perf_hover_act": "%{x|%d.%m.}<br>Ist: %{y:.1f} ct<extra></extra>",
+    "perf_band_cap": "Grauer Streifen: ±0,5 ct um 0.",
+    "eda_main_title": "Explorative Datenanalyse",
+    "eda_no": "Für EDA werden Preisdaten der Station benötigt.",
+    "eda_slider": "Fenster (Tage)",
+    "eda_empty": "Keine Daten im gewählten Fenster.",
+    "kpi_avg_price_lbl": "Ø Preis ({d} T.)",
+    "kpi_cheap_h": "Günstigste Stunde",
+    "kpi_exp_h": "Teuerste Stunde",
+    "kpi_vol_std": "Std. (ct)",
+    "eda_t1": "Stunde",
+    "eda_t2": "Wochentag",
+    "eda_t3": "Verteilung",
+    "eda_cap_hour": "Medianpreis nach Stunde (lokal)",
+    "eda_hover_hour": "Stunde %{x}:00<br>Median: %{y:.3f} €<extra></extra>",
+    "eda_trace_price": "Median €/l",
+    "eda_axis_hour": "Stunde",
+    "eda_axis_price": "€/l",
+    "eda_cap_day": "Mittlerer Preis nach Wochentag",
+    "eda_hover_day": "%{x}<br>Ø: %{y:.3f} €<extra></extra>",
+    "eda_axis_day": "Wochentag",
+    "eda_cap_box": "Preisverteilung nach Stunde",
+    "eda_cap_hist": "Histogramm (alle Stunden)",
+    "eda_axis_count": "Anzahl",
+    "eda_cap_wd": "Preis nach Wochentag",
+    "eda_cap_heat": "Heatmap: Stunde × Wochentag",
+    "eda_hover_price": "€/l",
+    "eda_hover_heat": "Wo %{x}:00 · %{y}<br>Median: %{z:.3f} €<extra></extra>",
+    "social_github": "GitHub",
+    "meth_summary": "Methodik & Datenquellen",
+    "footer_price": "Preisdaten:",
+    "footer_cc": "Rohpreise Tankerkönig (CC BY 4.0)",
+    "footer_dsi": "Capstone DSI",
+}
+
 _SVG_GH = """<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#24292f" d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.31 24 12c0-6.63-5.37-12-12-12z"/></svg>"""
 _SVG_IN = """<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#0A66C2" d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 1 1 0-4.125 2.062 2.062 0 0 1 0 4.125zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>"""
 
@@ -62,14 +181,18 @@ def osm_standort_embed(
     height: int = 200,
     dom_lat: float = KOELNER_DOM_LAT,
     dom_lon: float = KOELNER_DOM_LON,
-    tx=None,
+    *,
+    tx_map: dict,
 ) -> None:
     """OpenStreetMap über Leaflet: Tankstelle + Dom, fitBounds mit Rand-Puffer, Vollbild."""
-    if tx is None:
-        tx = messages()
     pf = float(MAP_FIT_PADDING_FRAC)
     mz = int(MAP_FIT_MAX_ZOOM)
-    _t_fs, _t_fsx, _t_mm, _t_ar = tx["map_fs"], tx["map_fs_exit"], tx["map_marker"], tx["map_aria"]
+    _t_fs, _t_fsx, _t_mm, _t_ar = (
+        tx_map["map_fs"],
+        tx_map["map_fs_exit"],
+        tx_map["map_marker"],
+        tx_map["map_aria"],
+    )
     html = f"""
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 <style>
@@ -736,8 +859,6 @@ button.topbar-refresh {
 }
 </style>
 """, unsafe_allow_html=True)
-
-tx = messages()
 
 # ── Daten laden ───────────────────────────────────────────────────────────────
 # Kurze TTL + no-cache: nach GitHub-Push schnell sichtbar (ohne auf den 5-Min-Block warten).
@@ -1545,7 +1666,7 @@ st.markdown(
     f'<div class="osm-map-title">{tx["map_station_line"]}<a href="{ARAL_STATION_URL}" target="_blank" rel="noopener noreferrer">{tx["topbar_aral_link"]}</a></div>',
     unsafe_allow_html=True,
 )
-osm_standort_embed(STATION_LAT, STATION_LON, tx=tx)
+osm_standort_embed(STATION_LAT, STATION_LON, tx_map=tx)
 
 TAB_LABELS = [tx["tab_price"], tx["tab_kpi"], tx["tab_perf"], tx["tab_eda"]]
 
@@ -2283,7 +2404,14 @@ with tab_eda:
                 st.plotly_chart(fig_heat, use_container_width=True)
 
 # ── Social & Methodik (nach Tabs, vor Footer) ───────────────────────────────
-_meth_inner = methodology_html(ML_ACC_TEST, ML_BASE_RICHT, ML_DELTA_PP)
+_meth_inner = f"""
+<p>Dieses Dashboard kombiniert <strong>Live-Dieselpreise</strong> (Tankerkönig-API),
+eine <strong>stündliche Kurzprognose</strong> (Random Forest, mehrere Features inkl. Nachbarn)
+und eine <strong>tagesbasierte ML-Prognose</strong> (Random Forest, Ziel Δ über Kernpreis-Horizont wie im Notebook).</p>
+<p>Offline-Referenz Richtung (Test): ca. <strong>{ML_ACC_TEST:.0f} %</strong> Trefferquote vs.
+Baseline „immer steigend“ ca. <strong>{ML_BASE_RICHT:.0f} %</strong> (Differenz rund <strong>{ML_DELTA_PP:.0f}</strong> Prozentpunkte).</p>
+<p>Charts nutzen 3h-Mediane und Öffnungszeiten-Filter; genaue Definitionen stehen im Repository-Notebook und in den Skripten.</p>
+"""
 st.markdown(f"""
 <div class="social-info-wrap">
   <div class="social-row-links">
