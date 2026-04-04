@@ -738,6 +738,58 @@ tx = messages()
 # ── Daten laden ───────────────────────────────────────────────────────────────
 # Kurze TTL + no-cache: nach GitHub-Push schnell sichtbar (ohne auf den 5-Min-Block warten).
 _HTTP_NO_CACHE = {"Cache-Control": "no-cache", "Pragma": "no-cache"}
+_TK_HEADERS = {"User-Agent": "dieselpreisprognose-dashboard/1.0"}
+
+
+def _tk_parse_diesel(v) -> float | None:
+    """Tankerkönig liefert ggf. false wenn geschlossen — dann kein Float."""
+    if v is None or v is False:
+        return None
+    try:
+        x = float(v)
+        if 0.3 <= x <= 5.0:
+            return x
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+def letzter_preis_aus_zeitreihe(
+    df_ext: pd.DataFrame, jetzt: pd.Timestamp, max_hours: float = 120.0
+) -> float | None:
+    """Letzte Diesel-Beobachtung aus Parquet-Zeitreihe (Station), wenn nicht zu alt."""
+    if df_ext is None or df_ext.empty:
+        return None
+    df = df_ext[["stunde", "preis"]].copy()
+    df["stunde"] = pd.to_datetime(df["stunde"], errors="coerce")
+    df["preis"] = pd.to_numeric(df["preis"], errors="coerce")
+    df = df.dropna(subset=["stunde", "preis"])
+    if df.empty:
+        return None
+    cut = jetzt - pd.Timedelta(hours=max_hours)
+    sub = df[df["stunde"] >= cut]
+    if sub.empty:
+        sub = df
+    row = sub.sort_values("stunde").iloc[-1]
+    return float(row["preis"])
+
+
+def letzter_preis_aus_live_log(
+    df_raw: pd.DataFrame, jetzt: pd.Timestamp, max_hours: float = 72.0
+) -> float | None:
+    if df_raw.empty or not {"timestamp", "preis"}.issubset(df_raw.columns):
+        return None
+    df = df_raw[["timestamp", "preis"]].copy()
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    df["preis"] = pd.to_numeric(df["preis"], errors="coerce")
+    df = df.dropna(subset=["timestamp", "preis"]).sort_values("timestamp")
+    if df.empty:
+        return None
+    row = df.iloc[-1]
+    age_h = (jetzt - pd.Timestamp(row["timestamp"])).total_seconds() / 3600.0
+    if age_h > max_hours:
+        return None
+    return float(row["preis"])
 
 
 @st.cache_data(ttl=60)
@@ -767,14 +819,34 @@ def lade_live_log():
     except:
         return pd.DataFrame(columns=["timestamp", "preis"])
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=45)
 def lade_aktueller_preis():
+    """Live-Diesel: zuerst detail.php (eine Station), dann prices.php."""
     try:
         key = st.secrets["TANKERKOENIG_KEY"]
-        url = f"https://creativecommons.tankerkoenig.de/json/prices.php?ids={STATION_UUID}&apikey={key}"
-        return float(requests.get(url, timeout=5).json()["prices"][STATION_UUID]["diesel"])
-    except:
+    except Exception:
         return None
+    for path, parser in (
+        (
+            f"https://creativecommons.tankerkoenig.de/json/detail.php?id={STATION_UUID}&apikey={key}",
+            lambda js: _tk_parse_diesel(st.get("diesel"))
+            if isinstance((st := js.get("station")), dict)
+            else None,
+        ),
+        (
+            f"https://creativecommons.tankerkoenig.de/json/prices.php?ids={STATION_UUID}&apikey={key}",
+            lambda js: _tk_parse_diesel((js.get("prices") or {}).get(STATION_UUID, {}).get("diesel")),
+        ),
+    ):
+        try:
+            r = requests.get(path, timeout=12, headers=_TK_HEADERS)
+            r.raise_for_status()
+            d = parser(r.json())
+            if d is not None:
+                return d
+        except Exception:
+            continue
+    return None
 
 @st.cache_data(ttl=1800)
 def lade_prognose_log():
@@ -1165,8 +1237,14 @@ if not df_live.empty:
     df_ext = pd.concat([df_ext, binned]).drop_duplicates(
         "stunde", keep="last").sort_values("stunde").reset_index(drop=True)
 
-jetzt_ts      = pd.Timestamp(datetime.now(BERLIN)).tz_localize(None)
-letzter_preis = preis_live if preis_live else float(prognose.get("preis_aktuell", 0))
+jetzt_ts = pd.Timestamp(datetime.now(BERLIN)).tz_localize(None)
+letzter_preis = preis_live
+if letzter_preis is None:
+    letzter_preis = letzter_preis_aus_live_log(df_live_raw, jetzt_ts)
+if letzter_preis is None:
+    letzter_preis = letzter_preis_aus_zeitreihe(df_ext, jetzt_ts)
+if letzter_preis is None or letzter_preis <= 0:
+    letzter_preis = float(prognose.get("preis_aktuell", 0) or 0)
 uhrzeit       = jetzt_ts.strftime("%H:%M")
 
 # Tages-Prognose
