@@ -1,6 +1,10 @@
 # dashboard.py — Spritpreisprognose ARAL Dürener Str. 407 · 50858 Köln
 # Streamlit Cloud · DSI Capstone Projekt 2026
 
+import json
+import time
+from io import BytesIO
+
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -737,8 +741,29 @@ tx = messages()
 
 # ── Daten laden ───────────────────────────────────────────────────────────────
 # Kurze TTL + no-cache: nach GitHub-Push schnell sichtbar (ohne auf den 5-Min-Block warten).
-_HTTP_NO_CACHE = {"Cache-Control": "no-cache", "Pragma": "no-cache"}
-_TK_HEADERS = {"User-Agent": "dieselpreisprognose-dashboard/1.0"}
+_HTTP_NO_CACHE = {
+    "Cache-Control": "no-cache, max-age=0",
+    "Pragma": "no-cache",
+}
+_DASH_UA = {"User-Agent": "dieselpreisprognose-dashboard/1.0"}
+_TK_HEADERS = {
+    "User-Agent": "dieselpreisprognose-dashboard/1.0",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+}
+
+
+def _github_raw_bytes(url: str, timeout: int = 30) -> bytes:
+    """raw.githubusercontent.com (Fastly) cacht aggressiv — cb= erzwingt oft einen CDN-Miss."""
+    sep = "&" if "?" in url else "?"
+    busted = f"{url}{sep}cb={int(time.time())}"
+    r = requests.get(
+        busted,
+        timeout=timeout,
+        headers={**_HTTP_NO_CACHE, **_DASH_UA},
+    )
+    r.raise_for_status()
+    return r.content
 
 
 def _tk_parse_diesel(v) -> float | None:
@@ -807,19 +832,22 @@ def letzter_preis_aus_live_log(
     return float(row["preis"])
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def lade_prognose():
-    return requests.get(JSON_URL, timeout=10, headers=_HTTP_NO_CACHE).json()
+    raw = _github_raw_bytes(JSON_URL, timeout=20)
+    return json.loads(raw.decode("utf-8"))
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def lade_tagesprognose():
     try:
-        return requests.get(TAGES_URL, timeout=10, headers=_HTTP_NO_CACHE).json()
-    except:
+        raw = _github_raw_bytes(TAGES_URL, timeout=20)
+        return json.loads(raw.decode("utf-8"))
+    except Exception:
         return {}
 
 @st.cache_data(ttl=120)
 def lade_preisverlauf():
+    # Parquet bewusst per pandas-URL (große Datei); Fallback-Preis kommt primär aus API + Live-Log-CSV.
     df = pd.read_parquet(PARQUET_URL)
     df = df[df["station_uuid"] == STATION_UUID].copy()
     df = df[df["diesel"].notna()]
@@ -827,14 +855,19 @@ def lade_preisverlauf():
     df = df.sort_values("date").rename(columns={"date": "stunde", "diesel": "preis"})
     return df[["stunde", "preis"]]
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=20)
 def lade_live_log():
     try:
-        return pd.read_csv(LOG_URL, parse_dates=["timestamp"], on_bad_lines="skip")
-    except:
+        raw = _github_raw_bytes(LOG_URL, timeout=20)
+        return pd.read_csv(
+            BytesIO(raw),
+            parse_dates=["timestamp"],
+            on_bad_lines="skip",
+        )
+    except Exception:
         return pd.DataFrame(columns=["timestamp", "preis"])
 
-@st.cache_data(ttl=45)
+@st.cache_data(ttl=15)
 def lade_aktueller_preis():
     """Live-Diesel: zuerst detail.php (eine Station), dann prices.php."""
     try:
@@ -861,10 +894,11 @@ def lade_aktueller_preis():
             continue
     return None
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=90)
 def lade_prognose_log():
     try:
-        df = pd.read_csv(PROG_LOG_URL, parse_dates=["datum"])
+        raw = _github_raw_bytes(PROG_LOG_URL, timeout=20)
+        df = pd.read_csv(BytesIO(raw), parse_dates=["datum"])
         # Tagesdatum immer auf 00:00 Uhr normieren (keine Sub-Tages-Zeiten aus der CSV)
         df["datum"] = pd.to_datetime(df["datum"], errors="coerce").dt.floor("D")
         for c in ("predicted_delta", "actual_delta", "richtung_korrekt"):
