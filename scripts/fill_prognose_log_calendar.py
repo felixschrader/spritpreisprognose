@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -25,6 +26,10 @@ import joblib
 import numpy as np
 import pandas as pd
 import pytz
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 REPO = Path(__file__).resolve().parents[1]
 ML_DIR = REPO / "data" / "ml"
@@ -85,6 +90,47 @@ def richtung_positiv_scharf(x: float) -> int:
     return int(float(x) > 0)
 
 
+def _download_model_if_missing(local_path: Path) -> bool:
+    """Wie live_inference_tagesbasis.py — CI hat oft kein .pkl im Repo."""
+    if local_path.is_file():
+        return True
+    fname = local_path.name
+    candidates = []
+    env_url = os.getenv("MODELL_RF_ML_MASTER_URL")
+    if env_url:
+        candidates.append(env_url)
+    candidates.append(
+        f"https://github.com/felixschrader/dieselpreisprognose/releases/latest/download/{fname}"
+    )
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    for url in candidates:
+        try:
+            r = requests.get(url, timeout=30)
+            if r.status_code == 200 and r.content:
+                local_path.write_bytes(r.content)
+                print(f"Modell geladen: {url}")
+                return True
+            print(f"Kein Modell unter {url} (HTTP {r.status_code})")
+        except Exception as e:
+            print(f"Download fehlgeschlagen ({url}): {e}")
+    return False
+
+
+def _predict_delta(fd: dict, features: list[str], modell) -> float:
+    """RandomForest oder gleiche Heuristik wie live_inference_tagesbasis ohne .pkl."""
+    X = pd.DataFrame([{c: fd[c] for c in features}])[features]
+    if modell is not None:
+        return float(modell.predict(X)[0])
+    h = np.nanmean(
+        [
+            fd.get("delta_kern_lag1", 0.0),
+            fd.get("delta_kern_lag2", 0.0),
+            fd.get("brent_delta2", 0.0),
+        ]
+    )
+    return float(np.clip(h, -0.03, 0.03))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -104,7 +150,13 @@ def main() -> None:
 
     metadaten = json.loads(META_PATH.read_text(encoding="utf-8"))
     features: list[str] = metadaten["feature_cols"]
-    modell = joblib.load(MODELL_PATH)
+
+    modell = None
+    if _download_model_if_missing(MODELL_PATH):
+        modell = joblib.load(MODELL_PATH)
+        print(f"Prognose-Log-Füllung: Modell · {len(features)} Features")
+    else:
+        print("Prognose-Log-Füllung: Heuristik (kein .pkl — wie live_inference Fallback)")
 
     preise = pd.read_parquet(PREISE_PQ)
     preise = preise[(preise["station_uuid"] == STATION_UUID) & preise["diesel"].notna()].copy()
@@ -177,8 +229,7 @@ def main() -> None:
         else:
             row_m = df_markt.iloc[j]
             fd = {c: safe(row_m[c]) for c in features}
-            X = pd.DataFrame([fd])[features]
-            pred = float(modell.predict(X)[0])
+            pred = _predict_delta(fd, features, modell)
 
             actual_s = ""
             richtung_s = ""
