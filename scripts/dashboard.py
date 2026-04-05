@@ -4,6 +4,8 @@
 import json
 import time
 from io import BytesIO
+from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 import pandas as pd
@@ -28,6 +30,8 @@ TAGES_URL    = f"{BASE_URL}/data/ml/prognose_tagesbasis.json"
 PARQUET_URL  = f"{BASE_URL}/data/tankstellen_preise.parquet"
 LOG_URL      = f"{BASE_URL}/data/ml/preis_live_log.csv"
 PROG_LOG_URL = f"{BASE_URL}/data/ml/prognose_log.csv"
+# Lokal (Repo) hat Vorrang — sonst zeigt Streamlit Cloud oft einen veralteten Stand von raw.githubusercontent.com
+PROG_LOG_LOCAL = Path(__file__).resolve().parent.parent / "data" / "ml" / "prognose_log.csv"
 BRENT_1H_URL = f"{BASE_URL}/data/brent_futures_intraday_1h.csv"
 BRENT_DAILY_URL = f"{BASE_URL}/data/brent_futures_daily.csv"
 EURUSD_URL   = f"{BASE_URL}/data/eur_usd_rate.csv"
@@ -105,9 +109,11 @@ tx = {
     "perf_baseline": "Baseline Richtung",
     "perf_cal_title": "Kalender (Richtung)",
     "perf_cal_cap": (
-        "Kacheln: P / A = vorhergesagte bzw. tatsächliche Tages-Δ in Cent (im Log als €/l, Anzeige ×100). "
-        "Nur Tage mit Richtungsauswertung. Kalender endet am letzten ausgewerteten Tag (gestern)."
+        "Kacheln: P / A = Tages-Δ in Cent (Log €/l ×100). "
+        "Grün/rot = Richtung ausgewertet; gelb = Log-Zeile ohne Treffer-Bewertung (noch offen / unvollständig). "
+        "Kalender bis gestern (Europe/Berlin)."
     ),
+    "perf_cal_src": "Log-Quelle: {src} · letztes Datum in Datei: {maxd}",
     "cal_weekdays": ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
     "perf_weekly_title": "Trefferquote nach Woche",
     "perf_bar_hover": "Trefferquote",
@@ -649,7 +655,8 @@ button.topbar-refresh {
 }
 .tag-kachel.korrekt { background: #E8F5E9; color: #1B5E20; border: 1px solid #A5D6A7; }
 .tag-kachel.falsch  { background: #FFEBEE; color: #B71C1C; border: 1px solid #EF9A9A; }
-.tag-kachel.leer    { background: transparent; border: 1px solid #F0F0F0; }
+.tag-kachel.leer       { background: transparent; border: 1px solid #F0F0F0; }
+.tag-kachel.ausstehend { background: #FFF8E1; color: #5D4037; border: 1px solid #FFE082; }
 .tag-symbol { font-size: 1.1rem; }
 .tag-datum  { font-size: 0.82rem; font-weight: 600; }
 .tag-delta  { font-size: 0.8rem; }
@@ -875,17 +882,24 @@ def lade_aktueller_preis():
             continue
     return None
 
-@st.cache_data(ttl=90)
+def _parse_prognose_log_df(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["datum"] = pd.to_datetime(df["datum"], errors="coerce").dt.floor("D")
+    for c in ("predicted_delta", "actual_delta", "richtung_korrekt"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df.sort_values("datum").reset_index(drop=True)
+
+
+@st.cache_data(ttl=15)
 def lade_prognose_log():
     try:
-        raw = _github_raw_bytes(PROG_LOG_URL, timeout=20)
-        df = pd.read_csv(BytesIO(raw), parse_dates=["datum"])
-        # Tagesdatum immer auf 00:00 Uhr normieren (keine Sub-Tages-Zeiten aus der CSV)
-        df["datum"] = pd.to_datetime(df["datum"], errors="coerce").dt.floor("D")
-        for c in ("predicted_delta", "actual_delta", "richtung_korrekt"):
-            df[c] = pd.to_numeric(df[c], errors="coerce")
-        return df.sort_values("datum").reset_index(drop=True)
-    except:
+        if PROG_LOG_LOCAL.is_file():
+            df = pd.read_csv(PROG_LOG_LOCAL, parse_dates=["datum"])
+        else:
+            raw = _github_raw_bytes(PROG_LOG_URL, timeout=20)
+            df = pd.read_csv(BytesIO(raw), parse_dates=["datum"])
+        return _parse_prognose_log_df(df)
+    except Exception:
         return pd.DataFrame(columns=["datum", "predicted_delta", "actual_delta", "richtung_korrekt"])
 
 
@@ -1646,8 +1660,8 @@ with tab_perf:
     if df_prog_log.empty:
         st.info(tx["perf_no_log"])
     else:
-        # Kalendertag & „gestern“ strikt nach Europe/Berlin (00:00 Uhr Tagesgrenze), unabhängig von jetzt_ts
-        heute_date = datetime.now(BERLIN).date()
+        # Kalendertag & „gestern“ — zoneinfo (zuverlässiger als pytz auf manchen Hosts)
+        heute_date = datetime.now(ZoneInfo("Europe/Berlin")).date()
         gestern_date = heute_date - timedelta(days=1)
         heute_dt = pd.Timestamp(datetime.combine(heute_date, datetime.min.time()))
         start_laufende_woche = heute_dt - pd.Timedelta(days=int(heute_dt.dayofweek))
@@ -1657,6 +1671,7 @@ with tab_perf:
 
         df_pl = df_prog_log.copy()
         df_pl["_tag"] = _datum_berlin_tag(df_pl["datum"])
+        df_pl = df_pl.sort_values("datum").drop_duplicates(subset=["_tag"], keep="last")
         d0 = pd.Timestamp(first_day_3voll).date()
         d1 = pd.Timestamp(last_day_3voll).date()
         df_log_3w = df_pl[
@@ -1701,6 +1716,14 @@ with tab_perf:
             unsafe_allow_html=True,
         )
         st.caption(tx["perf_cal_cap"])
+        _log_src_kurz = (
+            "`data/ml/prognose_log.csv` (lokal)"
+            if PROG_LOG_LOCAL.is_file()
+            else "GitHub raw (main)"
+        )
+        _max_tag = df_pl["_tag"].max() if not df_pl.empty else None
+        _max_tag_s = _max_tag.strftime("%d.%m.%Y") if _max_tag is not None else "—"
+        st.caption(tx["perf_cal_src"].format(src=_log_src_kurz, maxd=_max_tag_s))
 
         def rich_pfeil(delta_ct):
             if delta_ct > 0.5:
@@ -1709,16 +1732,21 @@ with tab_perf:
                 return "↓"
             return "→"
 
+        def fmt_delta_zeile(prefix: str, val) -> str:
+            if val is None or (isinstance(val, float) and np.isnan(val)) or pd.isna(val):
+                return f"{prefix} —"
+            ct = float(val) * 100
+            return f"{prefix} {rich_pfeil(ct)} {ct:+.1f}"
+
         fd = pd.Timestamp(montag_4w_start).date()
         # Keine leeren Kacheln für Tage nach dem letzten ausgewerteten Kalendertag (gestern)
         ld = min(pd.Timestamp(sonntag_woche_aktuell).date(), gestern_date)
         if ld < fd:
             ld = fd
         alle_tage = [fd + timedelta(days=i) for i in range((ld - fd).days + 1)]
-        log_dict = {
+        rows_by_tag = {
             r["_tag"]: r
             for _, r in df_pl[df_pl["_tag"] <= gestern_date].iterrows()
-            if pd.notna(r["richtung_korrekt"])
         }
 
         header_html = (
@@ -1747,20 +1775,27 @@ with tab_perf:
             for _ in range(erster_wt):
                 woche_html += '<div class="tag-kachel leer"></div>'
             for tag in woche:
-                if tag in log_dict:
-                    row = log_dict[tag]
-                    korr = int(row["richtung_korrekt"])
-                    cls = "korrekt" if korr == 1 else "falsch"
-                    p_ct = row["predicted_delta"] * 100
-                    a_ct = row["actual_delta"] * 100
-                    p_pf = rich_pfeil(p_ct)
-                    a_pf = rich_pfeil(a_ct)
+                if tag in rows_by_tag:
+                    row = rows_by_tag[tag]
                     datum = tag.strftime("%d.%m")
-                    woche_html += f"""<div class="tag-kachel {cls}" style="min-height:72px">
-                        <span class="tag-datum">{datum}</span>
-                        <span class="tag-delta">P {p_pf} {p_ct:+.1f}</span>
-                        <span class="tag-delta">A {a_pf} {a_ct:+.1f}</span>
-                    </div>"""
+                    if pd.notna(row["richtung_korrekt"]):
+                        korr = int(row["richtung_korrekt"])
+                        cls = "korrekt" if korr == 1 else "falsch"
+                        pl = fmt_delta_zeile("P", row["predicted_delta"])
+                        al = fmt_delta_zeile("A", row["actual_delta"])
+                        woche_html += f"""<div class="tag-kachel {cls}" style="min-height:72px">
+                            <span class="tag-datum">{datum}</span>
+                            <span class="tag-delta">{pl}</span>
+                            <span class="tag-delta">{al}</span>
+                        </div>"""
+                    else:
+                        pl = fmt_delta_zeile("P", row["predicted_delta"])
+                        al = fmt_delta_zeile("A", row["actual_delta"])
+                        woche_html += f"""<div class="tag-kachel ausstehend" style="min-height:72px">
+                            <span class="tag-datum">{datum}</span>
+                            <span class="tag-delta">{pl}</span>
+                            <span class="tag-delta">{al}</span>
+                        </div>"""
                 else:
                     woche_html += '<div class="tag-kachel leer"></div>'
             for _ in range(6 - letzter_wt):
