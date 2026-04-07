@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-04-07 07:57",
+  "timestamp": "2026-04-07 09:51",
   "station_uuid": "e1aefc4e-3ca1-4018-8d91-455b69d35d41",
   "station": "ARAL Dürener Str. 407",
-  "preis_aktuell": 2.439,
-  "nachbar_mean": 2.379,
+  "preis_aktuell": 2.419,
+  "nachbar_mean": 2.364,
   "dip_oder_peak": "Peak",
-  "delta_zu_nachbarn": 0.06,
+  "delta_zu_nachbarn": 0.0546,
   "richtung_6h": "fällt",
   "richtung_12h": "fällt",
   "empfehlung": "später tanken",
@@ -13,122 +13,122 @@
   "prognose_stufen": [
     {
       "stunde_offset": 1,
-      "zeitpunkt": "2026-04-07 08:57",
-      "richtung": "fällt"
+      "zeitpunkt": "2026-04-07 10:51",
+      "richtung": "steigt"
     },
     {
       "stunde_offset": 2,
-      "zeitpunkt": "2026-04-07 09:57",
+      "zeitpunkt": "2026-04-07 11:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 3,
-      "zeitpunkt": "2026-04-07 10:57",
+      "zeitpunkt": "2026-04-07 12:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 4,
-      "zeitpunkt": "2026-04-07 11:57",
+      "zeitpunkt": "2026-04-07 13:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 5,
-      "zeitpunkt": "2026-04-07 12:57",
+      "zeitpunkt": "2026-04-07 14:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 6,
-      "zeitpunkt": "2026-04-07 13:57",
+      "zeitpunkt": "2026-04-07 15:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 7,
-      "zeitpunkt": "2026-04-07 14:57",
+      "zeitpunkt": "2026-04-07 16:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 8,
-      "zeitpunkt": "2026-04-07 15:57",
+      "zeitpunkt": "2026-04-07 17:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 9,
-      "zeitpunkt": "2026-04-07 16:57",
+      "zeitpunkt": "2026-04-07 18:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 10,
-      "zeitpunkt": "2026-04-07 17:57",
+      "zeitpunkt": "2026-04-07 19:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 11,
-      "zeitpunkt": "2026-04-07 18:57",
+      "zeitpunkt": "2026-04-07 20:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 12,
-      "zeitpunkt": "2026-04-07 19:57",
+      "zeitpunkt": "2026-04-07 21:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 13,
-      "zeitpunkt": "2026-04-07 20:57",
+      "zeitpunkt": "2026-04-07 22:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 14,
-      "zeitpunkt": "2026-04-07 21:57",
+      "zeitpunkt": "2026-04-07 23:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 15,
-      "zeitpunkt": "2026-04-07 22:57",
+      "zeitpunkt": "2026-04-08 00:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 16,
-      "zeitpunkt": "2026-04-07 23:57",
+      "zeitpunkt": "2026-04-08 01:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 17,
-      "zeitpunkt": "2026-04-08 00:57",
+      "zeitpunkt": "2026-04-08 02:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 18,
-      "zeitpunkt": "2026-04-08 01:57",
+      "zeitpunkt": "2026-04-08 03:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 19,
-      "zeitpunkt": "2026-04-08 02:57",
+      "zeitpunkt": "2026-04-08 04:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 20,
-      "zeitpunkt": "2026-04-08 03:57",
+      "zeitpunkt": "2026-04-08 05:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 21,
-      "zeitpunkt": "2026-04-08 04:57",
+      "zeitpunkt": "2026-04-08 06:51",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 22,
-      "zeitpunkt": "2026-04-08 05:57",
+      "zeitpunkt": "2026-04-08 07:51",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 23,
-      "zeitpunkt": "2026-04-08 06:57",
+      "zeitpunkt": "2026-04-08 08:51",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 24,
-      "zeitpunkt": "2026-04-08 07:57",
+      "zeitpunkt": "2026-04-08 09:51",
       "richtung": "fällt"
     }
   ],
