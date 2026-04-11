@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-04-11 07:41",
+  "timestamp": "2026-04-11 09:19",
   "station_uuid": "e1aefc4e-3ca1-4018-8d91-455b69d35d41",
   "station": "ARAL Dürener Str. 407",
-  "preis_aktuell": 2.269,
-  "nachbar_mean": 2.22,
+  "preis_aktuell": 2.249,
+  "nachbar_mean": 2.212,
   "dip_oder_peak": "Peak",
-  "delta_zu_nachbarn": 0.0492,
+  "delta_zu_nachbarn": 0.0371,
   "richtung_6h": "fällt",
   "richtung_12h": "fällt",
   "empfehlung": "später tanken",
@@ -13,122 +13,122 @@
   "prognose_stufen": [
     {
       "stunde_offset": 1,
-      "zeitpunkt": "2026-04-11 08:41",
+      "zeitpunkt": "2026-04-11 10:19",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 2,
-      "zeitpunkt": "2026-04-11 09:41",
+      "zeitpunkt": "2026-04-11 11:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 3,
-      "zeitpunkt": "2026-04-11 10:41",
+      "zeitpunkt": "2026-04-11 12:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 4,
-      "zeitpunkt": "2026-04-11 11:41",
-      "richtung": "fällt"
+      "zeitpunkt": "2026-04-11 13:19",
+      "richtung": "steigt"
     },
     {
       "stunde_offset": 5,
-      "zeitpunkt": "2026-04-11 12:41",
+      "zeitpunkt": "2026-04-11 14:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 6,
-      "zeitpunkt": "2026-04-11 13:41",
+      "zeitpunkt": "2026-04-11 15:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 7,
-      "zeitpunkt": "2026-04-11 14:41",
+      "zeitpunkt": "2026-04-11 16:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 8,
-      "zeitpunkt": "2026-04-11 15:41",
+      "zeitpunkt": "2026-04-11 17:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 9,
-      "zeitpunkt": "2026-04-11 16:41",
+      "zeitpunkt": "2026-04-11 18:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 10,
-      "zeitpunkt": "2026-04-11 17:41",
+      "zeitpunkt": "2026-04-11 19:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 11,
-      "zeitpunkt": "2026-04-11 18:41",
+      "zeitpunkt": "2026-04-11 20:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 12,
-      "zeitpunkt": "2026-04-11 19:41",
+      "zeitpunkt": "2026-04-11 21:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 13,
-      "zeitpunkt": "2026-04-11 20:41",
+      "zeitpunkt": "2026-04-11 22:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 14,
-      "zeitpunkt": "2026-04-11 21:41",
+      "zeitpunkt": "2026-04-11 23:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 15,
-      "zeitpunkt": "2026-04-11 22:41",
+      "zeitpunkt": "2026-04-12 00:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 16,
-      "zeitpunkt": "2026-04-11 23:41",
+      "zeitpunkt": "2026-04-12 01:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 17,
-      "zeitpunkt": "2026-04-12 00:41",
+      "zeitpunkt": "2026-04-12 02:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 18,
-      "zeitpunkt": "2026-04-12 01:41",
+      "zeitpunkt": "2026-04-12 03:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 19,
-      "zeitpunkt": "2026-04-12 02:41",
+      "zeitpunkt": "2026-04-12 04:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 20,
-      "zeitpunkt": "2026-04-12 03:41",
+      "zeitpunkt": "2026-04-12 05:19",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 21,
-      "zeitpunkt": "2026-04-12 04:41",
-      "richtung": "fällt"
+      "zeitpunkt": "2026-04-12 06:19",
+      "richtung": "steigt"
     },
     {
       "stunde_offset": 22,
-      "zeitpunkt": "2026-04-12 05:41",
-      "richtung": "fällt"
+      "zeitpunkt": "2026-04-12 07:19",
+      "richtung": "steigt"
     },
     {
       "stunde_offset": 23,
-      "zeitpunkt": "2026-04-12 06:41",
+      "zeitpunkt": "2026-04-12 08:19",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 24,
-      "zeitpunkt": "2026-04-12 07:41",
+      "zeitpunkt": "2026-04-12 09:19",
       "richtung": "fällt"
     }
   ],
