@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-04-12 08:04",
+  "timestamp": "2026-04-12 09:46",
   "station_uuid": "e1aefc4e-3ca1-4018-8d91-455b69d35d41",
   "station": "ARAL Dürener Str. 407",
-  "preis_aktuell": 2.259,
-  "nachbar_mean": 2.216,
+  "preis_aktuell": 2.249,
+  "nachbar_mean": 2.211,
   "dip_oder_peak": "Peak",
-  "delta_zu_nachbarn": 0.0425,
+  "delta_zu_nachbarn": 0.0375,
   "richtung_6h": "fällt",
   "richtung_12h": "fällt",
   "empfehlung": "später tanken",
@@ -13,122 +13,122 @@
   "prognose_stufen": [
     {
       "stunde_offset": 1,
-      "zeitpunkt": "2026-04-12 09:04",
+      "zeitpunkt": "2026-04-12 10:46",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 2,
-      "zeitpunkt": "2026-04-12 10:04",
+      "zeitpunkt": "2026-04-12 11:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 3,
-      "zeitpunkt": "2026-04-12 11:04",
+      "zeitpunkt": "2026-04-12 12:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 4,
-      "zeitpunkt": "2026-04-12 12:04",
+      "zeitpunkt": "2026-04-12 13:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 5,
-      "zeitpunkt": "2026-04-12 13:04",
+      "zeitpunkt": "2026-04-12 14:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 6,
-      "zeitpunkt": "2026-04-12 14:04",
+      "zeitpunkt": "2026-04-12 15:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 7,
-      "zeitpunkt": "2026-04-12 15:04",
+      "zeitpunkt": "2026-04-12 16:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 8,
-      "zeitpunkt": "2026-04-12 16:04",
+      "zeitpunkt": "2026-04-12 17:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 9,
-      "zeitpunkt": "2026-04-12 17:04",
+      "zeitpunkt": "2026-04-12 18:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 10,
-      "zeitpunkt": "2026-04-12 18:04",
+      "zeitpunkt": "2026-04-12 19:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 11,
-      "zeitpunkt": "2026-04-12 19:04",
+      "zeitpunkt": "2026-04-12 20:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 12,
-      "zeitpunkt": "2026-04-12 20:04",
+      "zeitpunkt": "2026-04-12 21:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 13,
-      "zeitpunkt": "2026-04-12 21:04",
+      "zeitpunkt": "2026-04-12 22:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 14,
-      "zeitpunkt": "2026-04-12 22:04",
+      "zeitpunkt": "2026-04-12 23:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 15,
-      "zeitpunkt": "2026-04-12 23:04",
+      "zeitpunkt": "2026-04-13 00:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 16,
-      "zeitpunkt": "2026-04-13 00:04",
+      "zeitpunkt": "2026-04-13 01:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 17,
-      "zeitpunkt": "2026-04-13 01:04",
+      "zeitpunkt": "2026-04-13 02:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 18,
-      "zeitpunkt": "2026-04-13 02:04",
+      "zeitpunkt": "2026-04-13 03:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 19,
-      "zeitpunkt": "2026-04-13 03:04",
+      "zeitpunkt": "2026-04-13 04:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 20,
-      "zeitpunkt": "2026-04-13 04:04",
+      "zeitpunkt": "2026-04-13 05:46",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 21,
-      "zeitpunkt": "2026-04-13 05:04",
+      "zeitpunkt": "2026-04-13 06:46",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 22,
-      "zeitpunkt": "2026-04-13 06:04",
+      "zeitpunkt": "2026-04-13 07:46",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 23,
-      "zeitpunkt": "2026-04-13 07:04",
+      "zeitpunkt": "2026-04-13 08:46",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 24,
-      "zeitpunkt": "2026-04-13 08:04",
+      "zeitpunkt": "2026-04-13 09:46",
       "richtung": "fällt"
     }
   ],
