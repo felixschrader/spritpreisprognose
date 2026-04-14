@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-04-14 10:06",
+  "timestamp": "2026-04-14 11:51",
   "station_uuid": "e1aefc4e-3ca1-4018-8d91-455b69d35d41",
   "station": "ARAL Dürener Str. 407",
-  "preis_aktuell": 2.289,
-  "nachbar_mean": 2.234,
+  "preis_aktuell": 2.279,
+  "nachbar_mean": 2.23,
   "dip_oder_peak": "Peak",
-  "delta_zu_nachbarn": 0.0555,
+  "delta_zu_nachbarn": 0.0488,
   "richtung_6h": "fällt",
   "richtung_12h": "fällt",
   "empfehlung": "später tanken",
@@ -13,122 +13,122 @@
   "prognose_stufen": [
     {
       "stunde_offset": 1,
-      "zeitpunkt": "2026-04-14 11:06",
+      "zeitpunkt": "2026-04-14 12:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 2,
-      "zeitpunkt": "2026-04-14 12:06",
+      "zeitpunkt": "2026-04-14 13:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 3,
-      "zeitpunkt": "2026-04-14 13:06",
+      "zeitpunkt": "2026-04-14 14:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 4,
-      "zeitpunkt": "2026-04-14 14:06",
+      "zeitpunkt": "2026-04-14 15:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 5,
-      "zeitpunkt": "2026-04-14 15:06",
+      "zeitpunkt": "2026-04-14 16:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 6,
-      "zeitpunkt": "2026-04-14 16:06",
+      "zeitpunkt": "2026-04-14 17:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 7,
-      "zeitpunkt": "2026-04-14 17:06",
+      "zeitpunkt": "2026-04-14 18:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 8,
-      "zeitpunkt": "2026-04-14 18:06",
+      "zeitpunkt": "2026-04-14 19:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 9,
-      "zeitpunkt": "2026-04-14 19:06",
+      "zeitpunkt": "2026-04-14 20:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 10,
-      "zeitpunkt": "2026-04-14 20:06",
+      "zeitpunkt": "2026-04-14 21:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 11,
-      "zeitpunkt": "2026-04-14 21:06",
+      "zeitpunkt": "2026-04-14 22:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 12,
-      "zeitpunkt": "2026-04-14 22:06",
+      "zeitpunkt": "2026-04-14 23:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 13,
-      "zeitpunkt": "2026-04-14 23:06",
+      "zeitpunkt": "2026-04-15 00:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 14,
-      "zeitpunkt": "2026-04-15 00:06",
+      "zeitpunkt": "2026-04-15 01:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 15,
-      "zeitpunkt": "2026-04-15 01:06",
+      "zeitpunkt": "2026-04-15 02:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 16,
-      "zeitpunkt": "2026-04-15 02:06",
+      "zeitpunkt": "2026-04-15 03:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 17,
-      "zeitpunkt": "2026-04-15 03:06",
+      "zeitpunkt": "2026-04-15 04:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 18,
-      "zeitpunkt": "2026-04-15 04:06",
+      "zeitpunkt": "2026-04-15 05:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 19,
-      "zeitpunkt": "2026-04-15 05:06",
-      "richtung": "fällt"
+      "zeitpunkt": "2026-04-15 06:51",
+      "richtung": "steigt"
     },
     {
       "stunde_offset": 20,
-      "zeitpunkt": "2026-04-15 06:06",
+      "zeitpunkt": "2026-04-15 07:51",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 21,
-      "zeitpunkt": "2026-04-15 07:06",
+      "zeitpunkt": "2026-04-15 08:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 22,
-      "zeitpunkt": "2026-04-15 08:06",
+      "zeitpunkt": "2026-04-15 09:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 23,
-      "zeitpunkt": "2026-04-15 09:06",
+      "zeitpunkt": "2026-04-15 10:51",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 24,
-      "zeitpunkt": "2026-04-15 10:06",
+      "zeitpunkt": "2026-04-15 11:51",
       "richtung": "fällt"
     }
   ],
