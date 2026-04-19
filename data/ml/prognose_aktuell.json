@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-04-19 08:10",
+  "timestamp": "2026-04-19 09:48",
   "station_uuid": "e1aefc4e-3ca1-4018-8d91-455b69d35d41",
   "station": "ARAL Dürener Str. 407",
-  "preis_aktuell": 2.139,
-  "nachbar_mean": 2.107,
+  "preis_aktuell": 2.129,
+  "nachbar_mean": 2.094,
   "dip_oder_peak": "Peak",
-  "delta_zu_nachbarn": 0.0321,
+  "delta_zu_nachbarn": 0.0355,
   "richtung_6h": "fällt",
   "richtung_12h": "fällt",
   "empfehlung": "später tanken",
@@ -13,122 +13,122 @@
   "prognose_stufen": [
     {
       "stunde_offset": 1,
-      "zeitpunkt": "2026-04-19 09:10",
+      "zeitpunkt": "2026-04-19 10:48",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 2,
-      "zeitpunkt": "2026-04-19 10:10",
+      "zeitpunkt": "2026-04-19 11:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 3,
-      "zeitpunkt": "2026-04-19 11:10",
+      "zeitpunkt": "2026-04-19 12:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 4,
-      "zeitpunkt": "2026-04-19 12:10",
+      "zeitpunkt": "2026-04-19 13:48",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 5,
-      "zeitpunkt": "2026-04-19 13:10",
+      "zeitpunkt": "2026-04-19 14:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 6,
-      "zeitpunkt": "2026-04-19 14:10",
+      "zeitpunkt": "2026-04-19 15:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 7,
-      "zeitpunkt": "2026-04-19 15:10",
+      "zeitpunkt": "2026-04-19 16:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 8,
-      "zeitpunkt": "2026-04-19 16:10",
+      "zeitpunkt": "2026-04-19 17:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 9,
-      "zeitpunkt": "2026-04-19 17:10",
+      "zeitpunkt": "2026-04-19 18:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 10,
-      "zeitpunkt": "2026-04-19 18:10",
+      "zeitpunkt": "2026-04-19 19:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 11,
-      "zeitpunkt": "2026-04-19 19:10",
+      "zeitpunkt": "2026-04-19 20:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 12,
-      "zeitpunkt": "2026-04-19 20:10",
+      "zeitpunkt": "2026-04-19 21:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 13,
-      "zeitpunkt": "2026-04-19 21:10",
+      "zeitpunkt": "2026-04-19 22:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 14,
-      "zeitpunkt": "2026-04-19 22:10",
+      "zeitpunkt": "2026-04-19 23:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 15,
-      "zeitpunkt": "2026-04-19 23:10",
+      "zeitpunkt": "2026-04-20 00:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 16,
-      "zeitpunkt": "2026-04-20 00:10",
+      "zeitpunkt": "2026-04-20 01:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 17,
-      "zeitpunkt": "2026-04-20 01:10",
+      "zeitpunkt": "2026-04-20 02:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 18,
-      "zeitpunkt": "2026-04-20 02:10",
+      "zeitpunkt": "2026-04-20 03:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 19,
-      "zeitpunkt": "2026-04-20 03:10",
+      "zeitpunkt": "2026-04-20 04:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 20,
-      "zeitpunkt": "2026-04-20 04:10",
+      "zeitpunkt": "2026-04-20 05:48",
       "richtung": "fällt"
     },
     {
       "stunde_offset": 21,
-      "zeitpunkt": "2026-04-20 05:10",
+      "zeitpunkt": "2026-04-20 06:48",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 22,
-      "zeitpunkt": "2026-04-20 06:10",
+      "zeitpunkt": "2026-04-20 07:48",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 23,
-      "zeitpunkt": "2026-04-20 07:10",
+      "zeitpunkt": "2026-04-20 08:48",
       "richtung": "steigt"
     },
     {
       "stunde_offset": 24,
-      "zeitpunkt": "2026-04-20 08:10",
+      "zeitpunkt": "2026-04-20 09:48",
       "richtung": "steigt"
     }
   ],
